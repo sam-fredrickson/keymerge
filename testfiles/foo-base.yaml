@@ -1,0 +1,7 @@
+foos:
+  - name: foo1
+    type: bar
+    count: 1
+  - name: foo2
+    type: baz
+    count: 2
