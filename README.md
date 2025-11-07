@@ -227,6 +227,20 @@ type DuplicatePrimaryKeyError struct {
 }
 ```
 
+### `NonComparablePrimaryKeyError`
+
+Returned when a primary key value is not comparable (e.g., a map or slice). Primary key values must be comparable types that can be used as map keys:
+
+```go
+type NonComparablePrimaryKeyError struct {
+    Key      any // The non-comparable primary key value
+    Position int // Index where the non-comparable key was found
+}
+```
+
+Valid primary key types: strings, numbers, bools, pointers, channels, interfaces.
+Invalid primary key types: maps, slices.
+
 ## Performance
 
 The library is aimed towards config merging at application startup. Typical performance:

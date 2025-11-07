@@ -44,6 +44,19 @@ func (e *DuplicatePrimaryKeyError) Error() string {
 	return fmt.Sprintf("duplicate primary key %v found at positions %v", e.Key, e.Positions)
 }
 
+// NonComparablePrimaryKeyError is returned when a primary key value is not comparable
+// (e.g., a map or slice). Primary key values must be comparable types (strings, numbers, bools, etc.).
+type NonComparablePrimaryKeyError struct {
+	// Key is the non-comparable primary key value
+	Key any
+	// Position is the index where the non-comparable key was found
+	Position int
+}
+
+func (e *NonComparablePrimaryKeyError) Error() string {
+	return fmt.Sprintf("non-comparable primary key %v (type %T) at position %d", e.Key, e.Key, e.Position)
+}
+
 // Options configures the merge behavior.
 type Options struct {
 	// PrimaryKeyNames specifies field names to use as primary keys when merging lists.
@@ -265,6 +278,14 @@ func mergeSlices(base, overlay []any, opts Options) ([]any, error) {
 			continue
 		}
 
+		// Check if key is comparable (can be used as map key)
+		if !isComparable(key) {
+			return nil, &NonComparablePrimaryKeyError{
+				Key:      key,
+				Position: i,
+			}
+		}
+
 		existingIdx, exists := resultIndex[key]
 		if !exists {
 			resultIndex[key] = len(result)
@@ -298,20 +319,30 @@ func mergeSlices(base, overlay []any, opts Options) ([]any, error) {
 				continue // Skip deletion markers
 			}
 			key := getPrimaryKeyValue(overlayItem, primaryKey)
-			if key != nil {
-				if firstIdx, exists := overlayKeys[key]; exists {
-					return nil, &DuplicatePrimaryKeyError{
-						Key:       key,
-						Positions: []int{firstIdx, i},
-					}
-				}
-				overlayKeys[key] = i
+			if key == nil {
+				continue
 			}
+
+			// Check if key is comparable
+			if !isComparable(key) {
+				return nil, &NonComparablePrimaryKeyError{
+					Key:      key,
+					Position: i,
+				}
+			}
+
+			if firstIdx, exists := overlayKeys[key]; exists {
+				return nil, &DuplicatePrimaryKeyError{
+					Key:       key,
+					Positions: []int{firstIdx, i},
+				}
+			}
+			overlayKeys[key] = i
 		}
 	}
 
 	// Merge overlay items
-	for _, overlayItem := range overlay {
+	for i, overlayItem := range overlay {
 		// Check if this item is marked for deletion
 		if isMarkedForDeletion(overlayItem, opts.DeleteMarkerKey) {
 			key := getPrimaryKeyValue(overlayItem, primaryKey)
@@ -330,6 +361,14 @@ func mergeSlices(base, overlay []any, opts Options) ([]any, error) {
 			// No key, append
 			result = append(result, overlayItem)
 			continue
+		}
+
+		// Check if key is comparable (for Consolidate mode, Unique already checked)
+		if opts.ObjectListMode != ObjectListUnique && !isComparable(key) {
+			return nil, &NonComparablePrimaryKeyError{
+				Key:      key,
+				Position: i,
+			}
 		}
 
 		if idx, exists := resultIndex[key]; exists {
@@ -406,6 +445,20 @@ func getPrimaryKeyValue(item any, keyName string) any {
 	}
 
 	return m[keyName]
+}
+
+// isComparable checks if a value is comparable (can be used as a map key).
+// Maps and slices are not comparable in Go.
+func isComparable(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch value.(type) {
+	case map[string]any, []any:
+		return false
+	default:
+		return true
+	}
 }
 
 // isMarkedForDeletion checks if a value has the delete marker set to true.

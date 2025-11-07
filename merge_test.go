@@ -987,3 +987,107 @@ users:
 		t.Fatalf("expected DuplicatePrimaryKeyError, got %T", err)
 	}
 }
+
+func TestNonComparablePrimaryKey_Map(t *testing.T) {
+	base := map[string]any{
+		"users": []any{
+			map[string]any{
+				"id":   map[string]any{"nested": "value"}, // Map as primary key - not comparable!
+				"name": "alice",
+			},
+		},
+	}
+	overlay := map[string]any{
+		"users": []any{
+			map[string]any{
+				"id":   map[string]any{"nested": "value"},
+				"role": "admin",
+			},
+		},
+	}
+
+	_, err := keymerge.Merge(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+	}, base, overlay)
+
+	if err == nil {
+		t.Fatal("expected error for non-comparable primary key, got nil")
+	}
+
+	var ncErr *keymerge.NonComparablePrimaryKeyError
+	if !errors.As(err, &ncErr) {
+		t.Fatalf("expected NonComparablePrimaryKeyError, got %T: %v", err, err)
+	}
+
+	if ncErr.Position != 0 {
+		t.Fatalf("expected position 0, got %d", ncErr.Position)
+	}
+}
+
+func TestNonComparablePrimaryKey_Slice(t *testing.T) {
+	base := map[string]any{
+		"users": []any{
+			map[string]any{
+				"id":   []any{"foo", "bar"}, // Slice as primary key - not comparable!
+				"name": "alice",
+			},
+		},
+	}
+	overlay := map[string]any{
+		"users": []any{
+			map[string]any{
+				"id":   []any{"foo", "bar"},
+				"role": "admin",
+			},
+		},
+	}
+
+	_, err := keymerge.Merge(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+		ObjectListMode:  keymerge.ObjectListConsolidate,
+	}, base, overlay)
+
+	if err == nil {
+		t.Fatal("expected error for non-comparable primary key, got nil")
+	}
+
+	var ncErr *keymerge.NonComparablePrimaryKeyError
+	if !errors.As(err, &ncErr) {
+		t.Fatalf("expected NonComparablePrimaryKeyError, got %T: %v", err, err)
+	}
+}
+
+func TestNonComparablePrimaryKey_InOverlay(t *testing.T) {
+	base := []byte(`
+users:
+  - id: alice
+    role: user
+`)
+	// YAML can't represent maps/slices as keys easily, so use direct data
+	overlay := map[string]any{
+		"users": []any{
+			map[string]any{
+				"id":   []any{"invalid"},
+				"role": "admin",
+			},
+		},
+	}
+
+	baseData := make(map[string]any)
+	if err := yaml.Unmarshal(base, &baseData); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := keymerge.Merge(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+	}, baseData, overlay)
+
+	if err == nil {
+		t.Fatal("expected error for non-comparable primary key in overlay, got nil")
+	}
+
+	var ncErr *keymerge.NonComparablePrimaryKeyError
+	if !errors.As(err, &ncErr) {
+		t.Fatalf("expected NonComparablePrimaryKeyError, got %T: %v", err, err)
+	}
+}
