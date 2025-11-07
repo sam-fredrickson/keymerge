@@ -30,6 +30,17 @@ view-coverage-html:
 bench:
     go test -bench=. -benchmem ./bench/...
 
+# Run fuzz tests (default: 30s each)
+fuzz TIME="30s":
+    @echo "Fuzzing YAML merge..."
+    go test -fuzz=FuzzMergeYAML -fuzztime={{TIME}}
+    @echo "\nFuzzing direct merge..."
+    go test -fuzz=FuzzMergeDirect -fuzztime={{TIME}}
+    @echo "\nFuzzing primary key merge..."
+    go test -fuzz=FuzzMergeWithPrimaryKeys -fuzztime={{TIME}}
+    @echo "\nFuzzing scalar list modes..."
+    go test -fuzz=FuzzMergeScalarModes -fuzztime={{TIME}}
+
 # Launch godoc web server
 doc:
     go doc -all -http
