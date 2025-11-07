@@ -212,12 +212,15 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 		}
 	}
 
-	// Build index of base items by primary key
+	// Build index of items by primary key
 	result := make([]any, 0, len(base))
-	baseIndex := make(map[any]int, len(base))
+	// resultIndex maps primary keys to positions in result.
+	// Positions remain stable during merge because we mark deletions as nil
+	// rather than removing items. Filtering happens only at the end.
+	resultIndex := make(map[any]int, len(base))
 	for i, item := range base {
 		if key := getPrimaryKeyValue(item, primaryKey); key != nil {
-			baseIndex[key] = i
+			resultIndex[key] = i
 		}
 		result = append(result, item)
 	}
@@ -228,10 +231,10 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 		if isMarkedForDeletion(overlayItem, opts.DeleteMarkerKey) {
 			key := getPrimaryKeyValue(overlayItem, primaryKey)
 			if key != nil {
-				if idx, exists := baseIndex[key]; exists {
+				if idx, exists := resultIndex[key]; exists {
 					// Mark for deletion by setting to nil, we'll filter later
 					result[idx] = nil
-					delete(baseIndex, key)
+					delete(resultIndex, key)
 				}
 			}
 			continue
@@ -244,13 +247,13 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 			continue
 		}
 
-		if idx, exists := baseIndex[key]; exists {
+		if idx, exists := resultIndex[key]; exists {
 			// Merge with existing item
 			result[idx] = mergeValues(result[idx], overlayItem, opts)
 		} else {
 			// Append new item
 			result = append(result, overlayItem)
-			baseIndex[key] = len(result) - 1
+			resultIndex[key] = len(result) - 1
 		}
 	}
 
