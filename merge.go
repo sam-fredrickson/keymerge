@@ -214,7 +214,7 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 
 	// Build index of base items by primary key
 	result := make([]any, 0, len(base))
-	baseIndex := make(map[any]int)
+	baseIndex := make(map[any]int, len(base))
 	for i, item := range base {
 		if key := getPrimaryKeyValue(item, primaryKey); key != nil {
 			baseIndex[key] = i
