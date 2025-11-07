@@ -16,6 +16,9 @@
 *.out
 coverage.*
 
+# Profiling
+*.prof
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
