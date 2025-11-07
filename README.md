@@ -67,7 +67,7 @@ result, err := keymerge.MergeMarshal(opts, json.Unmarshal, json.Marshal, base, o
 // With already-unmarshaled data
 data1 := map[string]any{"foo": 1}
 data2 := map[string]any{"bar": 2}
-merged := keymerge.Merge(opts, data1, data2)
+merged, err := keymerge.Merge(opts, data1, data2)
 ```
 
 ### Deletion Example
@@ -115,6 +115,31 @@ result, _ = keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, over
 // Result: [api, metrics]
 ```
 
+### Duplicate Primary Key Handling
+
+```go
+base := []byte(`
+users:
+  - id: alice
+    role: user
+  - id: alice
+    role: admin
+`)
+
+// Unique mode (default): returns error
+opts := keymerge.Options{
+    PrimaryKeyNames: []string{"id"},
+    ObjectListMode:  keymerge.ObjectListUnique,
+}
+_, err := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base)
+// err: DuplicatePrimaryKeyError{Key: "alice", Positions: [0, 1]}
+
+// Consolidate mode: merges duplicate items
+opts.ObjectListMode = keymerge.ObjectListConsolidate
+result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base)
+// Result: Single alice with merged fields (role: admin)
+```
+
 ## How It Works
 
 ### Maps
@@ -128,6 +153,9 @@ Lists are merged based on primary keys:
   - `ScalarListDedup`: Concatenate and remove duplicates
   - `ScalarListReplace`: Replace base list entirely with overlay list
 - New items are appended, existing items are updated
+- Duplicate primary keys are handled according to `ObjectListMode`:
+  - `ObjectListUnique` (default): Returns an error if duplicates are found
+  - `ObjectListConsolidate`: Merges items with duplicate keys together
 
 ### Scalars
 Later values replace earlier ones.
@@ -139,9 +167,9 @@ When `DeleteMarkerKey` is set, items can be explicitly removed:
 
 ## API
 
-### `Merge(opts Options, docs ...any) any`
+### `Merge(opts Options, docs ...any) (any, error)`
 
-Merges already-unmarshaled documents. Format-agnostic and dependency-free.
+Merges already-unmarshaled documents. Format-agnostic and dependency-free. Returns an error if duplicate primary keys are found and `ObjectListMode` is set to `ObjectListUnique`.
 
 ### `MergeMarshal(opts Options, unmarshal, marshal, docs ...[]byte) ([]byte, error)`
 
@@ -162,6 +190,10 @@ type Options struct {
     // How to merge lists without primary keys
     // Default: ScalarListConcat
     ScalarListMode ScalarListMode
+
+    // How to handle items with duplicate primary keys in object lists
+    // Default: ObjectListUnique
+    ObjectListMode ObjectListMode
 }
 ```
 
@@ -173,6 +205,26 @@ const (
     ScalarListDedup   // Concatenate and remove duplicates
     ScalarListReplace // Replace base with overlay
 )
+```
+
+### `ObjectListMode`
+
+```go
+const (
+    ObjectListUnique       // Error if duplicate primary keys found (default)
+    ObjectListConsolidate  // Merge items with duplicate primary keys
+)
+```
+
+### `DuplicatePrimaryKeyError`
+
+Returned when duplicate primary keys are found and `ObjectListMode` is `ObjectListUnique`:
+
+```go
+type DuplicatePrimaryKeyError struct {
+    Key       any   // The duplicate primary key value
+    Positions []int // Indices where the duplicate was found
+}
 ```
 
 ## Performance

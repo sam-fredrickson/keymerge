@@ -97,7 +97,7 @@ func BenchmarkMerge_Small(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.Merge(opts, base, overlay)
 	}
 }
 
@@ -112,7 +112,7 @@ func BenchmarkMerge_Medium(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.Merge(opts, docs...)
 	}
 }
 
@@ -127,7 +127,7 @@ func BenchmarkMerge_Large(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.Merge(opts, docs...)
 	}
 }
 
@@ -167,7 +167,7 @@ func BenchmarkMerge_DeepNesting(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.Merge(opts, base, overlay)
 	}
 }
 
@@ -184,7 +184,7 @@ func BenchmarkMerge_ListsWithoutPrimaryKeys(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.Merge(opts, base, overlay)
 	}
 }
 
@@ -199,7 +199,7 @@ func BenchmarkMerge_ManySmallOverlays(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.Merge(opts, docs...)
 	}
 }
 
@@ -229,6 +229,6 @@ func BenchmarkMerge_ScalarOverridesOnly(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.Merge(opts, base, overlay)
 	}
 }

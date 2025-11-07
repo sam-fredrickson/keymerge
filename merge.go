@@ -7,6 +7,8 @@
 // that can unmarshal to map[string]any or []any.
 package keymerge
 
+import "fmt"
+
 // ScalarListMode specifies how to merge lists that don't have primary keys.
 type ScalarListMode int
 
@@ -18,6 +20,29 @@ const (
 	// ScalarListReplace replaces the base list entirely with the overlay list.
 	ScalarListReplace
 )
+
+// ObjectListMode specifies how to handle duplicate primary keys in object lists.
+type ObjectListMode int
+
+const (
+	// ObjectListUnique returns an error if duplicate primary keys are found (default behavior).
+	ObjectListUnique ObjectListMode = iota
+	// ObjectListConsolidate merges items with duplicate primary keys together.
+	ObjectListConsolidate
+)
+
+// DuplicatePrimaryKeyError is returned when duplicate primary keys are found
+// in a list and ObjectListMode is set to ObjectListUnique.
+type DuplicatePrimaryKeyError struct {
+	// Key is the duplicate primary key value
+	Key any
+	// Positions are the indices where the duplicate key was found
+	Positions []int
+}
+
+func (e *DuplicatePrimaryKeyError) Error() string {
+	return fmt.Sprintf("duplicate primary key %v found at positions %v", e.Key, e.Positions)
+}
 
 // Options configures the merge behavior.
 type Options struct {
@@ -46,6 +71,10 @@ type Options struct {
 	// ScalarListMode specifies how to merge lists without primary keys.
 	// Default is ScalarListConcat.
 	ScalarListMode ScalarListMode
+
+	// ObjectListMode specifies how to handle items with duplicate primary keys in object lists.
+	// Default is ObjectListUnique.
+	ObjectListMode ObjectListMode
 }
 
 // Merge merges multiple documents together.
@@ -69,10 +98,14 @@ type Options struct {
 //	}}
 //	result := Merge(opts, base, overlay)
 //	// Result: alice's role is updated to "admin"
-func Merge(opts Options, docs ...any) any {
+func Merge(opts Options, docs ...any) (any, error) {
 	var result any
+	var err error
 	for _, doc := range docs {
-		result = mergeValues(result, doc, opts)
+		result, err = mergeValues(result, doc, opts)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Strip delete marker keys from the final result
@@ -80,7 +113,7 @@ func Merge(opts Options, docs ...any) any {
 		result = stripDeleteMarker(result, opts.DeleteMarkerKey)
 	}
 
-	return result
+	return result, nil
 }
 
 // MergeMarshal merges multiple byte documents using provided marshaling functions.
@@ -128,21 +161,24 @@ func MergeMarshal(
 	}
 
 	// Merge
-	result := Merge(opts, parsedDocs...)
+	result, err := Merge(opts, parsedDocs...)
+	if err != nil {
+		return nil, err
+	}
 
 	// Marshal back
 	return marshal(result)
 }
 
-func mergeValues(base, overlay any, opts Options) any {
+func mergeValues(base, overlay any, opts Options) (any, error) {
 	// If overlay is nil, keep base
 	if overlay == nil {
-		return base
+		return base, nil
 	}
 
 	// If base is nil, use overlay
 	if base == nil {
-		return overlay
+		return overlay, nil
 	}
 
 	// Handle maps
@@ -160,10 +196,10 @@ func mergeValues(base, overlay any, opts Options) any {
 	}
 
 	// For scalar values, overlay wins
-	return overlay
+	return overlay, nil
 }
 
-func mergeMaps(base, overlay map[string]any, opts Options) map[string]any {
+func mergeMaps(base, overlay map[string]any, opts Options) (map[string]any, error) {
 	result := make(map[string]any)
 
 	// Copy base
@@ -180,19 +216,23 @@ func mergeMaps(base, overlay map[string]any, opts Options) map[string]any {
 		}
 
 		if baseVal, exists := result[k]; exists {
-			result[k] = mergeValues(baseVal, v, opts)
+			merged, err := mergeValues(baseVal, v, opts)
+			if err != nil {
+				return nil, err
+			}
+			result[k] = merged
 		} else {
 			result[k] = v
 		}
 	}
 
-	return result
+	return result, nil
 }
 
-func mergeSlices(base, overlay []any, opts Options) []any {
+func mergeSlices(base, overlay []any, opts Options) ([]any, error) {
 	// Check if items have primary keys
 	if len(overlay) == 0 {
-		return base
+		return base, nil
 	}
 
 	// Try to find primary key in first overlay item
@@ -201,14 +241,14 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 		// No primary key, merge according to ScalarListMode
 		switch opts.ScalarListMode {
 		case ScalarListReplace:
-			return overlay
+			return overlay, nil
 		case ScalarListDedup:
-			return deduplicateList(base, overlay)
+			return deduplicateList(base, overlay), nil
 		default: // ScalarListConcat
 			result := make([]any, len(base)+len(overlay))
 			copy(result, base)
 			copy(result[len(base):], overlay)
-			return result
+			return result, nil
 		}
 	}
 
@@ -219,10 +259,55 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 	// rather than removing items. Filtering happens only at the end.
 	resultIndex := make(map[any]int, len(base))
 	for i, item := range base {
-		if key := getPrimaryKeyValue(item, primaryKey); key != nil {
-			resultIndex[key] = i
+		key := getPrimaryKeyValue(item, primaryKey)
+		if key == nil {
+			result = append(result, item)
+			continue
 		}
-		result = append(result, item)
+
+		existingIdx, exists := resultIndex[key]
+		if !exists {
+			resultIndex[key] = len(result)
+			result = append(result, item)
+			continue
+		}
+
+		// Duplicate found!
+		if opts.ObjectListMode == ObjectListUnique {
+			return nil, &DuplicatePrimaryKeyError{
+				Key:       key,
+				Positions: []int{existingIdx, i},
+			}
+		}
+
+		// ObjectListConsolidate: merge into first occurrence
+		merged, err := mergeValues(result[existingIdx], item, opts)
+		if err != nil {
+			return nil, err
+		}
+		result[existingIdx] = merged
+		// Mark this duplicate for removal
+		result = append(result, nil)
+	}
+
+	// Check for duplicates in overlay (if ObjectListUnique mode)
+	if opts.ObjectListMode == ObjectListUnique {
+		overlayKeys := make(map[any]int, len(overlay))
+		for i, overlayItem := range overlay {
+			if isMarkedForDeletion(overlayItem, opts.DeleteMarkerKey) {
+				continue // Skip deletion markers
+			}
+			key := getPrimaryKeyValue(overlayItem, primaryKey)
+			if key != nil {
+				if firstIdx, exists := overlayKeys[key]; exists {
+					return nil, &DuplicatePrimaryKeyError{
+						Key:       key,
+						Positions: []int{firstIdx, i},
+					}
+				}
+				overlayKeys[key] = i
+			}
+		}
 	}
 
 	// Merge overlay items
@@ -249,7 +334,11 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 
 		if idx, exists := resultIndex[key]; exists {
 			// Merge with existing item
-			result[idx] = mergeValues(result[idx], overlayItem, opts)
+			merged, err := mergeValues(result[idx], overlayItem, opts)
+			if err != nil {
+				return nil, err
+			}
+			result[idx] = merged
 		} else {
 			// Append new item
 			result = append(result, overlayItem)
@@ -257,18 +346,18 @@ func mergeSlices(base, overlay []any, opts Options) []any {
 		}
 	}
 
-	// Filter out nil items (deleted items)
-	if opts.DeleteMarkerKey != "" {
+	// Filter out nil items (deleted items or consolidated duplicates)
+	if opts.DeleteMarkerKey != "" || opts.ObjectListMode == ObjectListConsolidate {
 		filtered := make([]any, 0, len(result))
 		for _, item := range result {
 			if item != nil {
 				filtered = append(filtered, item)
 			}
 		}
-		return filtered
+		return filtered, nil
 	}
 
-	return result
+	return result, nil
 }
 
 // stripDeleteMarker removes the delete marker key from a value recursively.

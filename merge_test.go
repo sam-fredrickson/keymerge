@@ -4,6 +4,7 @@ package keymerge_test
 
 import (
 	_ "embed"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -707,9 +708,12 @@ func TestScalarListMode_DedupComplexTypes(t *testing.T) {
 		},
 	}
 
-	result := keymerge.Merge(keymerge.Options{
+	result, err := keymerge.Merge(keymerge.Options{
 		ScalarListMode: keymerge.ScalarListDedup,
 	}, base, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	resultMap := result.(map[string]any)
 	items := resultMap["items"].([]any)
@@ -763,5 +767,223 @@ users:
 	// Verify the data is correct
 	if len(parsed.Users) != 3 {
 		t.Fatalf("expected 3 users, got %d", len(parsed.Users))
+	}
+}
+
+func TestObjectListMode_UniqueErrorsOnDuplicateInBase(t *testing.T) {
+	base := []byte(`
+users:
+  - id: alice
+    role: user
+  - id: bob
+    role: admin
+  - id: alice
+    role: manager
+`)
+	overlay := []byte(`
+users:
+  - id: charlie
+    role: user
+`)
+
+	_, err := mergeYAMLWith(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+		ObjectListMode:  keymerge.ObjectListUnique,
+	}, base, overlay)
+
+	if err == nil {
+		t.Fatal("expected error for duplicate keys in base, got nil")
+	}
+
+	var dupErr *keymerge.DuplicatePrimaryKeyError
+	if !errors.As(err, &dupErr) {
+		t.Fatalf("expected DuplicatePrimaryKeyError, got %T: %v", err, err)
+	}
+
+	if dupErr.Key != "alice" {
+		t.Fatalf("expected duplicate key 'alice', got %v", dupErr.Key)
+	}
+
+	if len(dupErr.Positions) != 2 || dupErr.Positions[0] != 0 || dupErr.Positions[1] != 2 {
+		t.Fatalf("expected positions [0, 2], got %v", dupErr.Positions)
+	}
+}
+
+func TestObjectListMode_UniqueErrorsOnDuplicateInOverlay(t *testing.T) {
+	base := []byte(`
+users:
+  - id: alice
+    role: user
+`)
+	overlay := []byte(`
+users:
+  - id: bob
+    role: admin
+  - id: charlie
+    role: user
+  - id: bob
+    role: manager
+`)
+
+	_, err := mergeYAMLWith(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+		ObjectListMode:  keymerge.ObjectListUnique,
+	}, base, overlay)
+
+	if err == nil {
+		t.Fatal("expected error for duplicate keys in overlay, got nil")
+	}
+
+	var dupErr *keymerge.DuplicatePrimaryKeyError
+	if !errors.As(err, &dupErr) {
+		t.Fatalf("expected DuplicatePrimaryKeyError, got %T: %v", err, err)
+	}
+
+	if dupErr.Key != "bob" {
+		t.Fatalf("expected duplicate key 'bob', got %v", dupErr.Key)
+	}
+}
+
+func TestObjectListMode_ConsolidateMergesDuplicatesInBase(t *testing.T) {
+	base := []byte(`
+users:
+  - id: alice
+    role: user
+    dept: eng
+  - id: bob
+    role: admin
+  - id: alice
+    role: manager
+    team: platform
+`)
+	overlay := []byte(`
+users:
+  - id: alice
+    active: true
+`)
+
+	result, err := mergeYAMLWith(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+		ObjectListMode:  keymerge.ObjectListConsolidate,
+	}, base, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var parsed struct {
+		Users []map[string]any `yaml:"users"`
+	}
+	if err := yaml.Unmarshal(result, &parsed); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 2 users: alice (consolidated) and bob
+	if len(parsed.Users) != 2 {
+		t.Fatalf("expected 2 users, got %d", len(parsed.Users))
+	}
+
+	// First should be alice with merged fields
+	alice := parsed.Users[0]
+	if alice["id"] != "alice" {
+		t.Fatalf("expected first user to be alice, got %v", alice["id"])
+	}
+	// Second alice should have merged into first, taking later values
+	if alice["role"] != "manager" {
+		t.Fatalf("expected role=manager (from second alice), got %v", alice["role"])
+	}
+	if alice["dept"] != "eng" {
+		t.Fatalf("expected dept=eng (from first alice), got %v", alice["dept"])
+	}
+	if alice["team"] != "platform" {
+		t.Fatalf("expected team=platform (from second alice), got %v", alice["team"])
+	}
+	if alice["active"] != true {
+		t.Fatalf("expected active=true (from overlay), got %v", alice["active"])
+	}
+
+	// Second should be bob
+	if parsed.Users[1]["id"] != "bob" {
+		t.Fatalf("expected second user to be bob, got %v", parsed.Users[1]["id"])
+	}
+}
+
+func TestObjectListMode_ConsolidateMergesDuplicatesInOverlay(t *testing.T) {
+	base := []byte(`
+users:
+  - id: alice
+    role: user
+`)
+	overlay := []byte(`
+users:
+  - id: alice
+    dept: eng
+  - id: bob
+    role: admin
+  - id: alice
+    team: platform
+`)
+
+	result, err := mergeYAMLWith(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+		ObjectListMode:  keymerge.ObjectListConsolidate,
+	}, base, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var parsed struct {
+		Users []map[string]any `yaml:"users"`
+	}
+	if err := yaml.Unmarshal(result, &parsed); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 2 users
+	if len(parsed.Users) != 2 {
+		t.Fatalf("expected 2 users, got %d", len(parsed.Users))
+	}
+
+	// Alice should have all fields merged
+	alice := parsed.Users[0]
+	if alice["id"] != "alice" {
+		t.Fatalf("expected alice, got %v", alice["id"])
+	}
+	if alice["role"] != "user" {
+		t.Fatalf("expected role=user, got %v", alice["role"])
+	}
+	if alice["dept"] != "eng" {
+		t.Fatalf("expected dept=eng, got %v", alice["dept"])
+	}
+	if alice["team"] != "platform" {
+		t.Fatalf("expected team=platform, got %v", alice["team"])
+	}
+}
+
+func TestObjectListMode_UniqueIsDefault(t *testing.T) {
+	base := []byte(`
+users:
+  - id: alice
+    role: user
+  - id: alice
+    role: admin
+`)
+	overlay := []byte(`
+users:
+  - id: bob
+    role: user
+`)
+
+	// Don't specify ObjectListMode, should default to Unique
+	_, err := mergeYAMLWith(keymerge.Options{
+		PrimaryKeyNames: []string{"id"},
+	}, base, overlay)
+
+	if err == nil {
+		t.Fatal("expected error (default should be Unique), got nil")
+	}
+
+	var dupErr *keymerge.DuplicatePrimaryKeyError
+	if !errors.As(err, &dupErr) {
+		t.Fatalf("expected DuplicatePrimaryKeyError, got %T", err)
 	}
 }
