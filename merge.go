@@ -490,36 +490,35 @@ func isMarkedForDeletion(value any, deleteMarkerKey string) bool {
 // For maps and slices, no deduplication is performed (they're always considered unique).
 func deduplicateList(base, overlay []any) []any {
 	result := make([]any, 0, len(base)+len(overlay))
-
-	// Helper to check if item already exists in result
-	contains := func(list []any, item any) bool {
-		// Only deduplicate comparable types
-		switch item.(type) {
-		case map[string]any, []any:
-			// Maps and slices aren't comparable, always add them
-			return false
-		default:
-			// For scalars, check for exact match
-			for _, existing := range list {
-				if existing == item {
-					return true
-				}
-			}
-			return false
-		}
-	}
+	seen := make(map[any]struct{}, len(base)+len(overlay))
 
 	// Add items from base
 	for _, item := range base {
-		if !contains(result, item) {
+		switch item.(type) {
+		case map[string]any, []any:
+			// Maps and slices aren't comparable, always add them
 			result = append(result, item)
+		default:
+			// For scalars, use map to track uniqueness
+			if _, exists := seen[item]; !exists {
+				seen[item] = struct{}{}
+				result = append(result, item)
+			}
 		}
 	}
 
 	// Add items from overlay
 	for _, item := range overlay {
-		if !contains(result, item) {
+		switch item.(type) {
+		case map[string]any, []any:
+			// Maps and slices aren't comparable, always add them
 			result = append(result, item)
+		default:
+			// For scalars, use map to track uniqueness
+			if _, exists := seen[item]; !exists {
+				seen[item] = struct{}{}
+				result = append(result, item)
+			}
 		}
 	}
 

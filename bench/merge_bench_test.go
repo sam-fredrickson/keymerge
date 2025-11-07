@@ -232,3 +232,73 @@ func BenchmarkMerge_ScalarOverridesOnly(b *testing.B) {
 		_, _ = keymerge.Merge(opts, base, overlay)
 	}
 }
+
+func BenchmarkMerge_ScalarListDedup_Small(b *testing.B) {
+	opts := keymerge.Options{
+		ScalarListMode: keymerge.ScalarListDedup,
+	}
+
+	base := map[string]any{
+		"tags": []any{"a", "b", "c", "d", "e"},
+	}
+	overlay := map[string]any{
+		"tags": []any{"c", "d", "e", "f", "g"},
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = keymerge.Merge(opts, base, overlay)
+	}
+}
+
+func BenchmarkMerge_ScalarListDedup_Medium(b *testing.B) {
+	opts := keymerge.Options{
+		ScalarListMode: keymerge.ScalarListDedup,
+	}
+
+	// 50 items in base, 50 in overlay with 25 duplicates
+	baseTags := make([]any, 50)
+	overlayTags := make([]any, 50)
+	for i := 0; i < 50; i++ {
+		baseTags[i] = i
+		if i < 25 {
+			overlayTags[i] = i // Duplicates
+		} else {
+			overlayTags[i] = i + 50 // New items
+		}
+	}
+
+	base := map[string]any{"tags": baseTags}
+	overlay := map[string]any{"tags": overlayTags}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = keymerge.Merge(opts, base, overlay)
+	}
+}
+
+func BenchmarkMerge_ScalarListDedup_Large(b *testing.B) {
+	opts := keymerge.Options{
+		ScalarListMode: keymerge.ScalarListDedup,
+	}
+
+	// 200 items in base, 200 in overlay with 100 duplicates
+	baseTags := make([]any, 200)
+	overlayTags := make([]any, 200)
+	for i := 0; i < 200; i++ {
+		baseTags[i] = i
+		if i < 100 {
+			overlayTags[i] = i // Duplicates
+		} else {
+			overlayTags[i] = i + 200 // New items
+		}
+	}
+
+	base := map[string]any{"tags": baseTags}
+	overlay := map[string]any{"tags": overlayTags}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = keymerge.Merge(opts, base, overlay)
+	}
+}
