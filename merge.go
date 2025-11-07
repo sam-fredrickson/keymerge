@@ -193,7 +193,7 @@ func mergeValues(base, overlay any, opts Options) (any, error) {
 }
 
 func mergeMaps(base, overlay map[string]any, opts Options) (map[string]any, error) {
-	result := make(map[string]any)
+	result := make(map[string]any, len(base)+len(overlay))
 
 	// Copy base
 	for k, v := range base {
