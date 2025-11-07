@@ -2,9 +2,8 @@
 
 // Package keymerge provides format-agnostic configuration merging with intelligent list handling.
 //
-// The library merges configuration documents by deep-merging maps and intelligently merging
-// lists based on primary key fields. It works with any serialization format (YAML, JSON, TOML, etc.)
-// that can unmarshal to map[string]any or []any.
+// The library deep-merges maps and intelligently merges lists by matching items on primary key fields.
+// It works with any serialization format (YAML, JSON, TOML, etc.) that unmarshals to map[string]any or []any.
 package keymerge
 
 import "fmt"
@@ -57,27 +56,18 @@ func (e *NonComparablePrimaryKeyError) Error() string {
 	return fmt.Sprintf("non-comparable primary key %v (type %T) at position %d", e.Key, e.Key, e.Position)
 }
 
-// Options configures the merge behavior.
+// Options configures merge behavior.
 type Options struct {
 	// PrimaryKeyNames specifies field names to use as primary keys when merging lists.
-	// When merging lists of maps, the first matching field name is used to identify
-	// corresponding items across documents. Items with matching keys are deep-merged;
-	// items without matches are appended.
+	// The first matching field name identifies corresponding items across documents.
+	// Items with matching keys are deep-merged; items without matches are appended.
 	//
-	// For example, with PrimaryKeyNames ["name", "id"], a list item will be matched
-	// by "name" if present, otherwise by "id" if present. If neither field exists,
-	// the item is treated as having no key and will be concatenated according to ScalarListMode.
-	//
-	// Lists of non-map items (e.g., []string) are merged according to ScalarListMode.
+	// Example: ["name", "id"] tries "name" first, then "id". Items without either field
+	// are treated as having no key and merged according to ScalarListMode.
 	PrimaryKeyNames []string
 
 	// DeleteMarkerKey specifies a field name that marks items for deletion.
-	// When set, if a map contains this field with a value of true, the item is removed
-	// from the result instead of being merged.
-	//
-	// For map values: setting {key: {DeleteMarkerKey: true}} removes that key.
-	// For list items: setting {primaryKey: "foo", DeleteMarkerKey: true} removes the item with that key.
-	//
+	// When set, maps with this field set to true are removed from the result.
 	// If empty, deletion semantics are disabled.
 	DeleteMarkerKey string
 
@@ -85,32 +75,30 @@ type Options struct {
 	// Default is ScalarListConcat.
 	ScalarListMode ScalarListMode
 
-	// ObjectListMode specifies how to handle items with duplicate primary keys in object lists.
+	// ObjectListMode specifies how to handle duplicate primary keys in object lists.
 	// Default is ObjectListUnique.
 	ObjectListMode ObjectListMode
 }
 
-// Merge merges multiple documents together.
+// Merge merges multiple documents left-to-right, with later documents taking precedence.
 //
-// Documents are merged left-to-right, with later documents taking precedence.
-// Maps are deep-merged recursively. Lists are merged by primary key if items are maps
-// containing a primary key field; otherwise lists are concatenated. Scalar values
+// Maps are deep-merged recursively. Lists are merged by primary key if items contain
+// a primary key field; otherwise merged according to ScalarListMode. Scalar values
 // are replaced by later values.
 //
-// This function is format-agnostic and works with any unmarshalled data structure.
-// The input documents should be map[string]any, []any, or scalar values.
+// Input documents should be map[string]any, []any, or scalar values.
 //
 // Example:
 //
-//	opts := Options{PrimaryKeyNames: []string{"id", "name"}}
+//	opts := Options{PrimaryKeyNames: []string{"name"}}
 //	base := map[string]any{"users": []any{
 //		map[string]any{"name": "alice", "role": "user"},
 //	}}
 //	overlay := map[string]any{"users": []any{
 //		map[string]any{"name": "alice", "role": "admin"},
 //	}}
-//	result := Merge(opts, base, overlay)
-//	// Result: alice's role is updated to "admin"
+//	result, _ := Merge(opts, base, overlay)
+//	// Result: alice's role updated to "admin"
 func Merge(opts Options, docs ...any) (any, error) {
 	var result any
 	var err error
@@ -129,30 +117,22 @@ func Merge(opts Options, docs ...any) (any, error) {
 	return result, nil
 }
 
-// MergeMarshal merges multiple byte documents using provided marshaling functions.
+// MergeMarshal merges byte documents using provided unmarshal and marshal functions.
 //
-// This function handles unmarshaling documents, merging them with Merge, and marshaling
-// the result back to bytes. It allows the merge algorithm to work with any serialization
-// format (YAML, JSON, TOML, etc.) by accepting custom unmarshal and marshal functions.
+// Documents are unmarshaled, merged left-to-right with Merge, then marshaled back to bytes.
+// Works with any serialization format (YAML, JSON, TOML, etc.) via custom marshal functions.
 //
-// Documents are merged left-to-right. If docs is empty, returns an empty byte slice.
-// Returns an error if unmarshaling or marshaling fails.
+// Returns an empty byte slice if docs is empty. Returns an error if unmarshaling,
+// merging, or marshaling fails.
 //
-// Example with YAML:
+// Example:
 //
 //	import "github.com/goccy/go-yaml"
 //
 //	opts := Options{PrimaryKeyNames: []string{"name"}}
 //	base := []byte("users:\n  - name: alice\n    role: user")
 //	overlay := []byte("users:\n  - name: alice\n    role: admin")
-//	result, err := MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
-//
-// Example with JSON:
-//
-//	import "encoding/json"
-//
-//	opts := Options{PrimaryKeyNames: []string{"id"}}
-//	result, err := MergeMarshal(opts, json.Unmarshal, json.Marshal, base, overlay)
+//	result, _ := MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
 func MergeMarshal(
 	opts Options,
 	unmarshal func([]byte, any) error,
