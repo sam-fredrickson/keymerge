@@ -1091,3 +1091,57 @@ users:
 		t.Fatalf("expected NonComparablePrimaryKeyError, got %T: %v", err, err)
 	}
 }
+
+func TestPrimaryKeyDiscovery_SkipsItemsWithoutKeys(t *testing.T) {
+	base := []byte(`
+items:
+  - name: item1
+    value: 1
+`)
+	// First overlay item has no primary key, second one does
+	overlay := []byte(`
+items:
+  - value: 999
+  - name: item1
+    value: 2
+  - name: item2
+    value: 3
+`)
+
+	result, err := mergeYAMLWith(keymerge.Options{
+		PrimaryKeyNames: []string{"name"},
+	}, base, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var parsed struct {
+		Items []map[string]any `yaml:"items"`
+	}
+	if err := yaml.Unmarshal(result, &parsed); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 3 items: item1 (merged with base), keyless item (appended), item2 (new)
+	if len(parsed.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(parsed.Items))
+	}
+
+	// First should be item1 with updated value
+	if parsed.Items[0]["name"] != "item1" || parsed.Items[0]["value"].(uint64) != 2 {
+		t.Fatalf("expected item1 with value=2, got %v", parsed.Items[0])
+	}
+
+	// Second should be the keyless item
+	if _, hasName := parsed.Items[1]["name"]; hasName {
+		t.Fatalf("expected keyless item, got %v", parsed.Items[1])
+	}
+	if parsed.Items[1]["value"].(uint64) != 999 {
+		t.Fatalf("expected keyless item with value=999, got %v", parsed.Items[1])
+	}
+
+	// Third should be item2
+	if parsed.Items[2]["name"] != "item2" || parsed.Items[2]["value"].(uint64) != 3 {
+		t.Fatalf("expected item2 with value=3, got %v", parsed.Items[2])
+	}
+}

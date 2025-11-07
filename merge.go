@@ -228,10 +228,19 @@ func mergeSlices(base, overlay []any, opts Options) ([]any, error) {
 		return base, nil
 	}
 
-	// Try to find primary key in first overlay item
-	primaryKey := findPrimaryKey(overlay[0], opts.PrimaryKeyNames)
+	// Try to find primary key by checking overlay items until we find one.
+	// This handles cases where the first item might not have a primary key
+	// but subsequent items do.
+	primaryKey := ""
+	for _, item := range overlay {
+		primaryKey = findPrimaryKey(item, opts.PrimaryKeyNames)
+		if primaryKey != "" {
+			break
+		}
+	}
+
 	if primaryKey == "" {
-		// No primary key, merge according to ScalarListMode
+		// No primary key found in any overlay item, merge according to ScalarListMode
 		switch opts.ScalarListMode {
 		case ScalarListReplace:
 			return overlay, nil
