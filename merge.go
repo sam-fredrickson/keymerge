@@ -437,8 +437,6 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 			return nil, err
 		}
 		result[existingIdx] = merged
-		// Mark this duplicate for removal
-		result = append(result, nil)
 	}
 
 	// Check for duplicates in overlay (if ObjectListUnique mode)
