@@ -1220,3 +1220,38 @@ func TestNestedArrayErrorPath(t *testing.T) {
 		t.Fatalf("expected path %v, got %v", expectedPath, ncErr.Path)
 	}
 }
+
+func TestScalarListMode_String(t *testing.T) {
+	tests := []struct {
+		mode keymerge.ScalarListMode
+		want string
+	}{
+		{keymerge.ScalarListConcat, "ScalarListConcat"},
+		{keymerge.ScalarListDedup, "ScalarListDedup"},
+		{keymerge.ScalarListReplace, "ScalarListReplace"},
+		{keymerge.ScalarListMode(99), "ScalarListMode(99)"}, // Invalid value
+	}
+
+	for _, tt := range tests {
+		if got := tt.mode.String(); got != tt.want {
+			t.Errorf("%v.String() = %q, want %q", tt.mode, got, tt.want)
+		}
+	}
+}
+
+func TestObjectListMode_String(t *testing.T) {
+	tests := []struct {
+		mode keymerge.ObjectListMode
+		want string
+	}{
+		{keymerge.ObjectListUnique, "ObjectListUnique"},
+		{keymerge.ObjectListConsolidate, "ObjectListConsolidate"},
+		{keymerge.ObjectListMode(99), "ObjectListMode(99)"}, // Invalid value
+	}
+
+	for _, tt := range tests {
+		if got := tt.mode.String(); got != tt.want {
+			t.Errorf("%v.String() = %q, want %q", tt.mode, got, tt.want)
+		}
+	}
+}

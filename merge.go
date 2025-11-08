@@ -25,6 +25,19 @@ const (
 	ScalarListReplace
 )
 
+func (m ScalarListMode) String() string {
+	switch m {
+	case ScalarListConcat:
+		return "ScalarListConcat"
+	case ScalarListDedup:
+		return "ScalarListDedup"
+	case ScalarListReplace:
+		return "ScalarListReplace"
+	default:
+		return fmt.Sprintf("ScalarListMode(%d)", m)
+	}
+}
+
 // ObjectListMode specifies how to handle duplicate primary keys in object lists.
 type ObjectListMode int
 
@@ -34,6 +47,17 @@ const (
 	// ObjectListConsolidate merges items with duplicate primary keys together.
 	ObjectListConsolidate
 )
+
+func (m ObjectListMode) String() string {
+	switch m {
+	case ObjectListUnique:
+		return "ObjectListUnique"
+	case ObjectListConsolidate:
+		return "ObjectListConsolidate"
+	default:
+		return fmt.Sprintf("ObjectListMode(%d)", m)
+	}
+}
 
 // DuplicatePrimaryKeyError is returned when duplicate primary keys are found
 // in a list and ObjectListMode is set to ObjectListUnique.
