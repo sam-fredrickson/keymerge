@@ -77,8 +77,8 @@ func (e *DuplicatePrimaryKeyError) Error() string {
 	if path == "" {
 		path = "(root)"
 	}
-	return fmt.Sprintf("duplicate primary key %v found at positions %v in document %d at path %s",
-		e.Key, e.Positions, e.DocIndex, path)
+	return fmt.Sprintf("duplicate primary key %v at path %s in document %d at positions %v",
+		e.Key, path, e.DocIndex, e.Positions)
 }
 
 // NonComparablePrimaryKeyError is returned when a primary key value is not comparable
@@ -99,8 +99,8 @@ func (e *NonComparablePrimaryKeyError) Error() string {
 	if path == "" {
 		path = "(root)"
 	}
-	return fmt.Sprintf("non-comparable primary key %v (type %T) at position %d in document %d at path %s",
-		e.Key, e.Key, e.Position, e.DocIndex, path)
+	return fmt.Sprintf("non-comparable primary key %v (type %T) at path %s in document %d at position %d",
+		e.Key, e.Key, path, e.DocIndex, e.Position)
 }
 
 // MarshalError is returned when unmarshaling or marshaling a document fails.
