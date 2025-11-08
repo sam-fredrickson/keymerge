@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -432,7 +433,7 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 	// rather than removing items. Filtering happens only at the end.
 	resultIndex := make(map[any]int, len(base))
 	for i, item := range base {
-		m.push(fmt.Sprintf("%d", i))
+		m.push(strconv.Itoa(i))
 
 		key := getPrimaryKeyValue(item, primaryKey)
 		if key == nil {
@@ -474,8 +475,8 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 		}
 
 		// ObjectListConsolidate: merge into first occurrence
-		m.pop()                                // Pop current index before merging
-		m.push(fmt.Sprintf("%d", existingIdx)) // Push existing index for merge
+		m.pop()                           // Pop current index before merging
+		m.push(strconv.Itoa(existingIdx)) // Push existing index for merge
 		merged, err := m.mergeValues(result[existingIdx], item)
 		m.pop()
 		if err != nil {
@@ -488,7 +489,7 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 	if m.opts.ObjectListMode == ObjectListUnique {
 		overlayKeys := make(map[any]int, len(overlay))
 		for i, overlayItem := range overlay {
-			m.push(fmt.Sprintf("%d", i))
+			m.push(strconv.Itoa(i))
 
 			if m.isMarkedForDeletion(overlayItem) {
 				m.pop()
@@ -529,7 +530,7 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 
 	// Merge overlay items
 	for i, overlayItem := range overlay {
-		m.push(fmt.Sprintf("%d", i))
+		m.push(strconv.Itoa(i))
 
 		// Check if this item is marked for deletion
 		if m.isMarkedForDeletion(overlayItem) {
@@ -567,8 +568,8 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 
 		if idx, exists := resultIndex[key]; exists {
 			// Merge with existing item
-			m.pop()                        // Pop current index before merging
-			m.push(fmt.Sprintf("%d", idx)) // Push existing index for merge
+			m.pop()                   // Pop current index before merging
+			m.push(strconv.Itoa(idx)) // Push existing index for merge
 			merged, err := m.mergeValues(result[idx], overlayItem)
 			m.pop()
 			if err != nil {

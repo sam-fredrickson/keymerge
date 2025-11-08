@@ -139,8 +139,8 @@ type Options struct {
 ## Performance
 
 The library is aimed towards config merging at application startup. Typical performance:
-- Small configs (2-10 items): ~500ns
-- Medium configs (100+ items, 5 overlays): ~40μs
-- Large configs (100+ items, 20 overlays): ~170μs
+- Small configs (2-10 items): ~600ns
+- Medium configs (100+ items, 5 overlays): ~38μs
+- Large configs (100+ items, 20 overlays): ~156μs
 
 Run benchmarks: `go test -bench=. ./bench/`
