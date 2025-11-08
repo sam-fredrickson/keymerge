@@ -58,12 +58,12 @@ func TestSmoke(t *testing.T) {
 		return cfg
 	}
 
-	actaulFooFinal, err := mergeYAML(fooBase, fooOverlay1, fooOverlay2)
+	actualFooFinal, err := mergeYAML(fooBase, fooOverlay1, fooOverlay2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	actual := parse(actaulFooFinal)
+	actual := parse(actualFooFinal)
 	expected := parse(fooFinal)
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("actual:\n%v\nexpected:\n%v", actual, expected)
