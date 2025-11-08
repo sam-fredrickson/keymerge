@@ -96,6 +96,12 @@ func (e *MarshalError) Unwrap() error {
 }
 
 // Options configures merge behavior.
+//
+// The zero value is valid and provides sensible defaults:
+//   - No primary key matching (all lists treated as scalar lists)
+//   - [ScalarListConcat] mode (lists are concatenated)
+//   - No deletion markers
+//   - [ObjectListUnique] mode (errors on duplicates, though none detected without primary keys)
 type Options struct {
 	// PrimaryKeyNames specifies field names to use as primary keys when merging lists.
 	// The first matching field name identifies corresponding items across documents.
@@ -121,10 +127,12 @@ type Options struct {
 
 // Merger performs document merging with the configured options.
 // It tracks the current document path for detailed error reporting.
+//
+// A Merger can be safely reused for multiple merge operations.
 type Merger struct {
-	opts  Options
-	path  []string
-	index int
+	opts  Options  // merge configuration
+	path  []string // current path in document tree for error reporting
+	index int      // current document index being processed
 }
 
 // NewMerger creates a new Merger with the given options.
@@ -549,6 +557,12 @@ func (m *Merger) stripDeleteMarker(value any) any {
 	}
 }
 
+// findPrimaryKey returns the first primary key field name found in item.
+// Returns empty string if item is not a map or no primary key field exists.
+//
+// Note: An empty string "" is technically a valid field name in Go maps,
+// but using it as a primary key name is not recommended as it cannot be
+// distinguished from the "not found" return value.
 func (m *Merger) findPrimaryKey(item any) string {
 	mp, ok := item.(map[string]any)
 	if !ok {
@@ -564,6 +578,11 @@ func (m *Merger) findPrimaryKey(item any) string {
 	return ""
 }
 
+// getPrimaryKeyValue returns the value of the primary key field.
+// Returns nil if:
+//   - item is not a map
+//   - the key doesn't exist in the map
+//   - the key exists but has an explicit nil/null value (treated same as missing)
 func getPrimaryKeyValue(item any, keyName string) any {
 	m, ok := item.(map[string]any)
 	if !ok {
@@ -608,7 +627,8 @@ func (m *Merger) isMarkedForDeletion(value any) bool {
 
 // deduplicateList concatenates base and overlay, removing duplicate values.
 // For scalar values (strings, numbers, bools), uses exact equality.
-// For maps and slices, no deduplication is performed (they're always considered unique).
+// For maps and slices, no deduplication is performed (they're always considered unique)
+// because they're not comparable in Go.
 func deduplicateList(base, overlay []any) []any {
 	result := make([]any, 0, len(base)+len(overlay))
 	seen := make(map[any]struct{}, len(base)+len(overlay))
