@@ -8,10 +8,16 @@ import (
 	"github.com/sam-fredrickson/keymerge"
 )
 
+const (
+	numUsers    = 100
+	numServices = 50
+	basePort    = 8000
+)
+
 // generateLargeBase creates a large base configuration with multiple sections.
 func generateLargeBase() any {
-	users := make([]any, 100)
-	for i := 0; i < 100; i++ {
+	users := make([]any, numUsers)
+	for i := 0; i < numUsers; i++ {
 		users[i] = map[string]any{
 			"id":    i,
 			"name":  "user" + string(rune(i)),
@@ -25,11 +31,11 @@ func generateLargeBase() any {
 		}
 	}
 
-	services := make([]any, 50)
-	for i := 0; i < 50; i++ {
+	services := make([]any, numServices)
+	for i := 0; i < numServices; i++ {
 		services[i] = map[string]any{
 			"name": "service" + string(rune(i)),
-			"port": 8000 + i,
+			"port": basePort + i,
 			"config": map[string]any{
 				"timeout":     30,
 				"retries":     3,
