@@ -3,6 +3,7 @@
 package bench
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/sam-fredrickson/keymerge"
@@ -20,8 +21,8 @@ func generateLargeBase() any {
 	for i := 0; i < numUsers; i++ {
 		users[i] = map[string]any{
 			"id":    i,
-			"name":  "user" + string(rune(i)),
-			"email": "user" + string(rune(i)) + "@example.com",
+			"name":  fmt.Sprintf("user%d", i),
+			"email": fmt.Sprintf("user%d@example.com", i),
 			"role":  "member",
 			"settings": map[string]any{
 				"notifications": true,
@@ -34,7 +35,7 @@ func generateLargeBase() any {
 	services := make([]any, numServices)
 	for i := 0; i < numServices; i++ {
 		services[i] = map[string]any{
-			"name": "service" + string(rune(i)),
+			"name": fmt.Sprintf("service%d", i),
 			"port": basePort + i,
 			"config": map[string]any{
 				"timeout":     30,
@@ -76,7 +77,7 @@ func generateOverlays(count int) []any {
 			},
 			"services": []any{
 				map[string]any{
-					"name": "service" + string(rune(i)),
+					"name": fmt.Sprintf("service%d", i),
 					"config": map[string]any{
 						"timeout": 60,
 					},
