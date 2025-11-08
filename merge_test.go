@@ -7,6 +7,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -1265,5 +1266,37 @@ func TestObjectListMode_String(t *testing.T) {
 		if got := tt.mode.String(); got != tt.want {
 			t.Errorf("%v.String() = %q, want %q", tt.mode, got, tt.want)
 		}
+	}
+}
+
+func TestNewMerger_EmptyPrimaryKeyName(t *testing.T) {
+	_, err := keymerge.NewMerger(keymerge.Options{
+		PrimaryKeyNames: []string{"id", "", "name"},
+	})
+
+	if err == nil {
+		t.Fatal("expected error for empty string in PrimaryKeyNames, got nil")
+	}
+
+	if !errors.Is(err, keymerge.ErrInvalidOptions) {
+		t.Errorf("expected errors.Is(err, ErrInvalidOptions) to be true")
+	}
+
+	if !strings.Contains(err.Error(), "empty string") {
+		t.Errorf("expected error message to mention 'empty string', got: %v", err)
+	}
+}
+
+func TestMerge_EmptyPrimaryKeyName(t *testing.T) {
+	_, err := keymerge.Merge(keymerge.Options{
+		PrimaryKeyNames: []string{""},
+	}, map[string]any{"a": 1})
+
+	if err == nil {
+		t.Fatal("expected error for empty string in PrimaryKeyNames, got nil")
+	}
+
+	if !errors.Is(err, keymerge.ErrInvalidOptions) {
+		t.Errorf("expected errors.Is(err, ErrInvalidOptions) to be true")
 	}
 }

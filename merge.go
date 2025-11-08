@@ -23,6 +23,8 @@ var (
 	ErrNonComparablePrimaryKey = errors.New("non-comparable primary key")
 	// ErrMarshal indicates a marshaling or unmarshaling operation failed.
 	ErrMarshal = errors.New("marshal error")
+	// ErrInvalidOptions indicates invalid merge options were provided.
+	ErrInvalidOptions = errors.New("invalid options")
 )
 
 // ScalarListMode specifies how to merge lists that don't have primary keys.
@@ -184,8 +186,14 @@ type Merger struct {
 }
 
 // NewMerger creates a new Merger with the given options.
-func NewMerger(opts Options) *Merger {
-	return &Merger{opts: opts}
+// Returns an error if the options are invalid (e.g., empty strings in PrimaryKeyNames).
+func NewMerger(opts Options) (*Merger, error) {
+	for _, name := range opts.PrimaryKeyNames {
+		if name == "" {
+			return nil, fmt.Errorf("%w: empty string in PrimaryKeyNames", ErrInvalidOptions)
+		}
+	}
+	return &Merger{opts: opts}, nil
 }
 
 // Options returns the merge options configured for this [Merger].
@@ -195,7 +203,11 @@ func (m *Merger) Options() Options {
 
 // Merge merges multiple documents. See [Merger.Merge] for details.
 func Merge(opts Options, docs ...any) (any, error) {
-	return NewMerger(opts).Merge(docs...)
+	m, err := NewMerger(opts)
+	if err != nil {
+		return nil, err
+	}
+	return m.Merge(docs...)
 }
 
 // MergeMarshal merges byte documents using provided unmarshal and marshal functions.
@@ -206,7 +218,11 @@ func MergeMarshal(
 	marshal func(any) ([]byte, error),
 	docs ...[]byte,
 ) ([]byte, error) {
-	return NewMerger(opts).MergeMarshal(unmarshal, marshal, docs...)
+	m, err := NewMerger(opts)
+	if err != nil {
+		return nil, err
+	}
+	return m.MergeMarshal(unmarshal, marshal, docs...)
 }
 
 // Merge merges multiple documents left-to-right, with later documents taking precedence.
