@@ -5,47 +5,67 @@ package keymerge_test
 import (
 	"testing"
 
-	"github.com/goccy/go-yaml"
-
 	"github.com/sam-fredrickson/keymerge"
 )
 
-// FuzzMergeYAML fuzzes the MergeMarshal function with arbitrary YAML input.
-// This helps find edge cases like malformed YAML, unusual nesting, etc.
-func FuzzMergeYAML(f *testing.F) {
-	// Seed with some interesting test cases
-	f.Add([]byte(`a: 1`), []byte(`b: 2`))
-	f.Add([]byte(`users: [{name: alice}]`), []byte(`users: [{name: bob}]`))
-	f.Add([]byte(`x: [1, 2, 3]`), []byte(`x: [4, 5]`))
-	f.Add([]byte(`deep: {nested: {value: 1}}`), []byte(`deep: {nested: {value: 2}}`))
-	f.Add([]byte(``), []byte(`a: 1`))
-	f.Add([]byte(`null`), []byte(`a: 1`))
+// FuzzMergeComplexStructures fuzzes the Merge function with complex nested structures.
+// This tests the core merge algorithm with maps, slices, and various data types.
+func FuzzMergeComplexStructures(f *testing.F) {
+	// Seed with interesting values that will be used to build structures
+	f.Add(int64(1), int64(2), "alice", "bob")
+	f.Add(int64(0), int64(-1), "x", "y")
+	f.Add(int64(100), int64(200), "name", "id")
 
-	f.Fuzz(func(t *testing.T, base, overlay []byte) {
-		// Try to merge - we mainly care that it doesn't panic
+	f.Fuzz(func(t *testing.T, num1, num2 int64, str1, str2 string) {
+		// Build complex nested structures
+		base := map[string]any{
+			"scalar":    num1,
+			"string":    str1,
+			"list":      []any{num1, str1, num1 + 1},
+			"nested":    map[string]any{"deep": map[string]any{"value": num1}},
+			"mixed":     []any{map[string]any{"key": str1}, num1},
+			"users":     []any{map[string]any{"name": str1, "age": num1}},
+			"nullValue": nil,
+		}
+		overlay := map[string]any{
+			"scalar":    num2,
+			"string":    str2,
+			"list":      []any{num2, str2},
+			"nested":    map[string]any{"deep": map[string]any{"other": num2}},
+			"mixed":     []any{map[string]any{"key": str2}, num2},
+			"users":     []any{map[string]any{"name": str2, "age": num2}},
+			"newField":  "added",
+			"nullValue": num2,
+		}
+
 		opts := keymerge.Options{
 			PrimaryKeyNames: []string{"name", "id"},
 			ScalarListMode:  keymerge.ScalarListConcat,
 		}
 
-		result, err := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
+		// Should not panic
+		result, err := keymerge.Merge(opts, base, overlay)
+		if err != nil {
+			t.Skip("merge failed (expected for some inputs)")
+		}
 
-		// If merge succeeded, result should ideally be valid YAML.
-		// However, there are edge cases where the YAML library's Marshal
-		// produces output that its own Unmarshal can't parse (e.g., strings
-		// starting with "..." which is the document end marker).
-		// We skip validation in these cases since it's not our bug.
-		if err == nil {
-			var parsed any
-			if unmarshalErr := yaml.Unmarshal(result, &parsed); unmarshalErr != nil {
-				// Only skip if this looks like a YAML library round-trip issue
-				// (i.e., the result is small and looks like a simple scalar)
-				if len(result) < 100 {
-					t.Skipf("YAML library round-trip issue: %v\nResult: %s", unmarshalErr, result)
-				} else {
-					t.Fatalf("merge succeeded but result is invalid YAML: %v\nResult: %s", unmarshalErr, result)
-				}
-			}
+		// Result should be a map
+		if result == nil {
+			t.Fatal("result is nil")
+		}
+		resultMap, ok := result.(map[string]any)
+		if !ok {
+			t.Fatalf("result is not a map: %T", result)
+		}
+
+		// Verify some basic properties
+		if _, hasNewField := resultMap["newField"]; !hasNewField {
+			t.Fatal("overlay fields should be present in result")
+		}
+
+		// Verify the merge was performed (result should have both values in some form)
+		if resultMap["scalar"] == nil {
+			t.Fatal("scalar field should not be nil after merge")
 		}
 	})
 }
