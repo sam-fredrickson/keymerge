@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `docs/guide.md` to give a more comprehensive overview of the library.
 
 ### Changed
 - Optimize path tracking in list merging: replaced `fmt.Sprintf` with `strconv.Itoa` for ~43% speedup and ~84% reduction in allocations
