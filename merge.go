@@ -6,7 +6,10 @@
 // It works with any serialization format (YAML, JSON, TOML, etc.) that unmarshals to map[string]any or []any.
 package keymerge
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 // ScalarListMode specifies how to merge lists that don't have primary keys.
 type ScalarListMode int
@@ -442,12 +445,7 @@ func isComparable(value any) bool {
 	if value == nil {
 		return true
 	}
-	switch value.(type) {
-	case map[string]any, []any:
-		return false
-	default:
-		return true
-	}
+	return reflect.TypeOf(value).Comparable()
 }
 
 // isMarkedForDeletion checks if a value has the delete marker set to true.
