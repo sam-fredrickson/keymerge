@@ -528,106 +528,102 @@ users:
 	}
 }
 
-func TestScalarListMode_Concat(t *testing.T) {
-	base := []byte(`tags: [foo, bar]`)
-	overlay := []byte(`tags: [baz, qux]`)
-
-	result, err := mergeYAMLWith(keymerge.Options{
-		PrimaryKeyNames: []string{"name"},
-		ScalarListMode:  keymerge.ScalarListConcat,
-	}, base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func verifyStringTags(t *testing.T, result []byte, expected []string) {
+	t.Helper()
 	var parsed struct {
 		Tags []string `yaml:"tags"`
 	}
 	if err := yaml.Unmarshal(result, &parsed); err != nil {
 		t.Fatal(err)
 	}
-
-	expected := []string{"foo", "bar", "baz", "qux"}
 	if !reflect.DeepEqual(parsed.Tags, expected) {
 		t.Fatalf("expected %v, got %v", expected, parsed.Tags)
 	}
 }
 
-func TestScalarListMode_Dedup(t *testing.T) {
-	base := []byte(`tags: [foo, bar, baz]`)
-	overlay := []byte(`tags: [bar, qux, foo]`)
-
-	result, err := mergeYAMLWith(keymerge.Options{
-		PrimaryKeyNames: []string{"name"},
-		ScalarListMode:  keymerge.ScalarListDedup,
-	}, base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var parsed struct {
-		Tags []string `yaml:"tags"`
-	}
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
-
-	// Should have: foo, bar, baz (from base), qux (from overlay)
-	// bar and foo from overlay are duplicates
-	expected := []string{"foo", "bar", "baz", "qux"}
-	if !reflect.DeepEqual(parsed.Tags, expected) {
-		t.Fatalf("expected %v, got %v", expected, parsed.Tags)
-	}
-}
-
-func TestScalarListMode_Replace(t *testing.T) {
-	base := []byte(`tags: [foo, bar, baz]`)
-	overlay := []byte(`tags: [qux, quux]`)
-
-	result, err := mergeYAMLWith(keymerge.Options{
-		PrimaryKeyNames: []string{"name"},
-		ScalarListMode:  keymerge.ScalarListReplace,
-	}, base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var parsed struct {
-		Tags []string `yaml:"tags"`
-	}
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
-
-	// Should completely replace base with overlay
-	expected := []string{"qux", "quux"}
-	if !reflect.DeepEqual(parsed.Tags, expected) {
-		t.Fatalf("expected %v, got %v", expected, parsed.Tags)
-	}
-}
-
-func TestScalarListMode_DedupNumbers(t *testing.T) {
-	base := []byte(`ports: [8080, 8081, 8082]`)
-	overlay := []byte(`ports: [8081, 8083, 8080]`)
-
-	result, err := mergeYAMLWith(keymerge.Options{
-		ScalarListMode: keymerge.ScalarListDedup,
-	}, base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func verifyIntPorts(t *testing.T, result []byte, expected []int) {
+	t.Helper()
 	var parsed struct {
 		Ports []int `yaml:"ports"`
 	}
 	if err := yaml.Unmarshal(result, &parsed); err != nil {
 		t.Fatal(err)
 	}
-
-	// Should deduplicate: 8080, 8081, 8082, 8083
-	expected := []int{8080, 8081, 8082, 8083}
 	if !reflect.DeepEqual(parsed.Ports, expected) {
 		t.Fatalf("expected %v, got %v", expected, parsed.Ports)
+	}
+}
+
+func TestScalarListModes(t *testing.T) {
+	tests := []struct {
+		name         string
+		mode         keymerge.ScalarListMode
+		base         string
+		overlay      string
+		expectedTags []string
+		expectedInts []int
+	}{
+		{
+			name:         "Concat",
+			mode:         keymerge.ScalarListConcat,
+			base:         `tags: [foo, bar]`,
+			overlay:      `tags: [baz, qux]`,
+			expectedTags: []string{"foo", "bar", "baz", "qux"},
+		},
+		{
+			name:         "Dedup",
+			mode:         keymerge.ScalarListDedup,
+			base:         `tags: [foo, bar, baz]`,
+			overlay:      `tags: [bar, qux, foo]`,
+			expectedTags: []string{"foo", "bar", "baz", "qux"},
+		},
+		{
+			name:         "Replace",
+			mode:         keymerge.ScalarListReplace,
+			base:         `tags: [foo, bar, baz]`,
+			overlay:      `tags: [qux, quux]`,
+			expectedTags: []string{"qux", "quux"},
+		},
+		{
+			name:         "DedupNumbers",
+			mode:         keymerge.ScalarListDedup,
+			base:         `ports: [8080, 8081, 8082]`,
+			overlay:      `ports: [8081, 8083, 8080]`,
+			expectedInts: []int{8080, 8081, 8082, 8083},
+		},
+		{
+			name:         "DefaultIsConcat",
+			mode:         keymerge.ScalarListConcat, // Explicitly set to show it's the default
+			base:         `tags: [a, b]`,
+			overlay:      `tags: [c]`,
+			expectedTags: []string{"a", "b", "c"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := keymerge.Options{
+				ScalarListMode: tt.mode,
+			}
+			// Add PrimaryKeyNames for non-number tests to match original behavior
+			if tt.expectedTags != nil {
+				opts.PrimaryKeyNames = []string{"name"}
+			}
+
+			result, err := mergeYAMLWith(opts, []byte(tt.base), []byte(tt.overlay))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Parse and verify based on expected type
+			if tt.expectedTags != nil {
+				verifyStringTags(t, result, tt.expectedTags)
+				return
+			}
+			if tt.expectedInts != nil {
+				verifyIntPorts(t, result, tt.expectedInts)
+			}
+		})
 	}
 }
 
@@ -635,7 +631,7 @@ func TestScalarListMode_DefaultIsConcat(t *testing.T) {
 	base := []byte(`tags: [a, b]`)
 	overlay := []byte(`tags: [c]`)
 
-	// Don't specify ScalarListMode, should default to concat
+	// Don't specify ScalarListMode at all, should default to concat
 	result, err := mergeYAMLWith(keymerge.Options{}, base, overlay)
 	if err != nil {
 		t.Fatal(err)
