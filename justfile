@@ -30,6 +30,23 @@ view-coverage-html:
 bench:
     go test -bench=. -benchmem ./bench/...
 
+# Run benchmarks with CPU and memory profiling
+profile NAME:
+    go test -bench=. -benchmem -cpuprofile=cpu-{{NAME}}.prof -memprofile=mem-{{NAME}}.prof ./bench/...
+    @echo "Profiling complete. Use 'just view-profile {{NAME}}' to view results."
+
+# View CPU profile
+view-profile NAME TYPE="cpu":
+    go tool pprof -http=:8080 {{TYPE}}-{{NAME}}.prof
+
+# View CPU profile in terminal (top 20)
+view-profile-text NAME TYPE="cpu":
+    go tool pprof -top {{TYPE}}-{{NAME}}.prof
+
+# Compare two CPU profiles
+compare-profile NAME1 NAME2 TYPE="cpu":
+    go tool pprof -http=:8080 -base={{TYPE}}-{{NAME1}}.prof {{TYPE}}-{{NAME2}}.prof
+
 # Run fuzz tests (default: 30s each)
 fuzz TIME="30s":
     @echo "Fuzzing YAML merge..."
