@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/goccy/go-yaml"
@@ -807,6 +808,11 @@ users:
 	if len(dupErr.Positions) != 2 || dupErr.Positions[0] != 0 || dupErr.Positions[1] != 2 {
 		t.Fatalf("expected positions [0, 2], got %v", dupErr.Positions)
 	}
+
+	// Path should be either users.0 or users.2 (the duplicate positions)
+	if !slices.Equal(dupErr.Path, []string{"users", "0"}) && !slices.Equal(dupErr.Path, []string{"users", "2"}) {
+		t.Fatalf("expected duplicate path 'users.0' or 'users.2', got %v", dupErr.Path)
+	}
 }
 
 func TestObjectListMode_UniqueErrorsOnDuplicateInOverlay(t *testing.T) {
@@ -841,6 +847,11 @@ users:
 
 	if dupErr.Key != "bob" {
 		t.Fatalf("expected duplicate key 'bob', got %v", dupErr.Key)
+	}
+
+	// Path should be either users.0 or users.2 (the duplicate positions in overlay)
+	if !slices.Equal(dupErr.Path, []string{"users", "0"}) && !slices.Equal(dupErr.Path, []string{"users", "2"}) {
+		t.Fatalf("expected duplicate path 'users.0' or 'users.2', got %v", dupErr.Path)
 	}
 }
 
@@ -986,6 +997,11 @@ users:
 	if !errors.As(err, &dupErr) {
 		t.Fatalf("expected DuplicatePrimaryKeyError, got %T", err)
 	}
+
+	// Path should be either users.0 or users.1 (the duplicate positions)
+	if !slices.Equal(dupErr.Path, []string{"users", "0"}) && !slices.Equal(dupErr.Path, []string{"users", "1"}) {
+		t.Fatalf("expected duplicate path 'users.0' or 'users.1', got %v", dupErr.Path)
+	}
 }
 
 func TestNonComparablePrimaryKey_Map(t *testing.T) {
@@ -1022,6 +1038,10 @@ func TestNonComparablePrimaryKey_Map(t *testing.T) {
 	if ncErr.Position != 0 {
 		t.Fatalf("expected position 0, got %d", ncErr.Position)
 	}
+
+	if !slices.Equal(ncErr.Path, []string{"users", "0"}) {
+		t.Fatalf("expected non-comparable path 'users.0', got %v", ncErr.Path)
+	}
 }
 
 func TestNonComparablePrimaryKey_Slice(t *testing.T) {
@@ -1054,6 +1074,10 @@ func TestNonComparablePrimaryKey_Slice(t *testing.T) {
 	var ncErr *keymerge.NonComparablePrimaryKeyError
 	if !errors.As(err, &ncErr) {
 		t.Fatalf("expected NonComparablePrimaryKeyError, got %T: %v", err, err)
+	}
+
+	if !slices.Equal(ncErr.Path, []string{"users", "0"}) {
+		t.Fatalf("expected non-comparable path 'users.0', got %v", ncErr.Path)
 	}
 }
 
@@ -1089,6 +1113,10 @@ users:
 	var ncErr *keymerge.NonComparablePrimaryKeyError
 	if !errors.As(err, &ncErr) {
 		t.Fatalf("expected NonComparablePrimaryKeyError, got %T: %v", err, err)
+	}
+
+	if !slices.Equal(ncErr.Path, []string{"users", "0"}) {
+		t.Fatalf("expected non-comparable path 'users.0', got %v", ncErr.Path)
 	}
 }
 
@@ -1143,5 +1171,52 @@ items:
 	// Third should be item2
 	if parsed.Items[2]["name"] != "item2" || parsed.Items[2]["value"].(uint64) != 3 {
 		t.Fatalf("expected item2 with value=3, got %v", parsed.Items[2])
+	}
+}
+
+func TestNestedArrayErrorPath(t *testing.T) {
+	// Test that errors in nested arrays show complete paths
+	base := map[string]any{
+		"teams": []any{
+			map[string]any{
+				"name": "backend",
+				"members": []any{
+					map[string]any{"id": "alice", "role": "lead"},
+					map[string]any{"id": "bob", "role": "dev"},
+				},
+			},
+		},
+	}
+
+	overlay := map[string]any{
+		"teams": []any{
+			map[string]any{
+				"name": "backend",
+				"members": []any{
+					map[string]any{"id": "alice", "role": "admin"},
+					map[string]any{"id": map[string]any{"nested": "bad"}, "role": "dev"}, // Non-comparable!
+				},
+			},
+		},
+	}
+
+	opts := keymerge.Options{
+		PrimaryKeyNames: []string{"name", "id"},
+	}
+
+	_, err := keymerge.Merge(opts, base, overlay)
+	if err == nil {
+		t.Fatal("expected error for non-comparable primary key in nested array")
+	}
+
+	var ncErr *keymerge.NonComparablePrimaryKeyError
+	if !errors.As(err, &ncErr) {
+		t.Fatalf("expected NonComparablePrimaryKeyError, got %T: %v", err, err)
+	}
+
+	// Path should show the complete nested location: teams.0.members.1
+	expectedPath := []string{"teams", "0", "members", "1"}
+	if !slices.Equal(ncErr.Path, expectedPath) {
+		t.Fatalf("expected path %v, got %v", expectedPath, ncErr.Path)
 	}
 }
