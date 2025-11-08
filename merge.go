@@ -7,10 +7,22 @@
 package keymerge
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
 	"strings"
+)
+
+// Sentinel errors for simple error checking with [errors.Is].
+// For detailed error information, use [errors.As] with the typed errors below.
+var (
+	// ErrDuplicatePrimaryKey indicates duplicate primary keys were found in a list.
+	ErrDuplicatePrimaryKey = errors.New("duplicate primary key")
+	// ErrNonComparablePrimaryKey indicates a primary key value is not comparable (e.g., a map or slice).
+	ErrNonComparablePrimaryKey = errors.New("non-comparable primary key")
+	// ErrMarshal indicates a marshaling or unmarshaling operation failed.
+	ErrMarshal = errors.New("marshal error")
 )
 
 // ScalarListMode specifies how to merge lists that don't have primary keys.
@@ -81,6 +93,10 @@ func (e *DuplicatePrimaryKeyError) Error() string {
 		e.Key, path, e.DocIndex, e.Positions)
 }
 
+func (e *DuplicatePrimaryKeyError) Is(target error) bool {
+	return target == ErrDuplicatePrimaryKey
+}
+
 // NonComparablePrimaryKeyError is returned when a primary key value is not comparable
 // (e.g., a map or slice). Primary key values must be comparable types (strings, numbers, bools, etc.).
 type NonComparablePrimaryKeyError struct {
@@ -103,6 +119,10 @@ func (e *NonComparablePrimaryKeyError) Error() string {
 		e.Key, e.Key, path, e.DocIndex, e.Position)
 }
 
+func (e *NonComparablePrimaryKeyError) Is(target error) bool {
+	return target == ErrNonComparablePrimaryKey
+}
+
 // MarshalError is returned when unmarshaling or marshaling a document fails.
 type MarshalError struct {
 	// Err is the underlying error returned by a marshaling function.
@@ -117,6 +137,10 @@ func (e *MarshalError) Error() string {
 
 func (e *MarshalError) Unwrap() error {
 	return e.Err
+}
+
+func (e *MarshalError) Is(target error) bool {
+	return target == ErrMarshal
 }
 
 // Options configures merge behavior.

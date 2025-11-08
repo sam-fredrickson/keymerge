@@ -210,6 +210,10 @@ func TestInvalidYAML(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid YAML")
 	}
+
+	if !errors.Is(err, keymerge.ErrMarshal) {
+		t.Errorf("expected errors.Is(err, ErrMarshal) to be true")
+	}
 }
 
 func TestAlternativePrimaryKey(t *testing.T) {
@@ -792,6 +796,10 @@ users:
 		t.Fatal("expected error for duplicate keys in base, got nil")
 	}
 
+	if !errors.Is(err, keymerge.ErrDuplicatePrimaryKey) {
+		t.Errorf("expected errors.Is(err, ErrDuplicatePrimaryKey) to be true")
+	}
+
 	var dupErr *keymerge.DuplicatePrimaryKeyError
 	if !errors.As(err, &dupErr) {
 		t.Fatalf("expected DuplicatePrimaryKeyError, got %T: %v", err, err)
@@ -834,6 +842,10 @@ users:
 
 	if err == nil {
 		t.Fatal("expected error for duplicate keys in overlay, got nil")
+	}
+
+	if !errors.Is(err, keymerge.ErrDuplicatePrimaryKey) {
+		t.Errorf("expected errors.Is(err, ErrDuplicatePrimaryKey) to be true")
 	}
 
 	var dupErr *keymerge.DuplicatePrimaryKeyError
@@ -1024,6 +1036,10 @@ func TestNonComparablePrimaryKey_Map(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected error for non-comparable primary key, got nil")
+	}
+
+	if !errors.Is(err, keymerge.ErrNonComparablePrimaryKey) {
+		t.Errorf("expected errors.Is(err, ErrNonComparablePrimaryKey) to be true")
 	}
 
 	var ncErr *keymerge.NonComparablePrimaryKeyError
