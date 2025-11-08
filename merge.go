@@ -74,7 +74,7 @@ func (m ObjectListMode) String() string {
 }
 
 // DuplicatePrimaryKeyError is returned when duplicate primary keys are found
-// in a list and ObjectListMode is set to ObjectListUnique.
+// in a list and [ObjectListMode] is set to [ObjectListUnique].
 type DuplicatePrimaryKeyError struct {
 	// Key is the duplicate primary key value
 	Key any
@@ -158,7 +158,7 @@ type Options struct {
 	// Items with matching keys are deep-merged; items without matches are appended.
 	//
 	// Example: ["name", "id"] tries "name" first, then "id". Items without either field
-	// are treated as having no key and merged according to ScalarListMode.
+	// are treated as having no key and merged according to [ScalarListMode].
 	PrimaryKeyNames []string
 
 	// DeleteMarkerKey specifies a field name that marks items for deletion.
@@ -167,11 +167,11 @@ type Options struct {
 	DeleteMarkerKey string
 
 	// ScalarListMode specifies how to merge lists without primary keys.
-	// Default is ScalarListConcat.
+	// Default is [ScalarListConcat].
 	ScalarListMode ScalarListMode
 
 	// ObjectListMode specifies how to handle duplicate primary keys in object lists.
-	// Default is ObjectListUnique.
+	// Default is [ObjectListUnique].
 	ObjectListMode ObjectListMode
 }
 
@@ -179,14 +179,16 @@ type Options struct {
 // It tracks the current document path for detailed error reporting.
 //
 // A Merger can be safely reused for multiple merge operations.
+//
+// A Merger is not safe to use concurrently.
 type Merger struct {
 	opts  Options  // merge configuration
 	path  []string // current path in document tree for error reporting
 	index int      // current document index being processed
 }
 
-// NewMerger creates a new Merger with the given options.
-// Returns an error if the options are invalid (e.g., empty strings in PrimaryKeyNames).
+// NewMerger creates a new [Merger] with the given options.
+// Returns an error if the options are invalid.
 func NewMerger(opts Options) (*Merger, error) {
 	for _, name := range opts.PrimaryKeyNames {
 		if name == "" {
@@ -228,8 +230,10 @@ func MergeMarshal(
 // Merge merges multiple documents left-to-right, with later documents taking precedence.
 //
 // Maps are deep-merged recursively. Lists are merged by primary key if items contain
-// a primary key field; otherwise merged according to ScalarListMode. Scalar values
+// a primary key field; otherwise merged according to [ScalarListMode]. Scalar values
 // are replaced by later values.
+//
+// Duplicate items in lists are handled according to [ObjectListMode].
 //
 // Input documents should be map[string]any, []any, or scalar values.
 //
@@ -263,7 +267,7 @@ func (m *Merger) Merge(docs ...any) (any, error) {
 
 // MergeMarshal merges byte documents using provided unmarshal and marshal functions.
 //
-// Documents are unmarshaled, merged left-to-right with Merge, then marshaled back to bytes.
+// Documents are unmarshaled, merged left-to-right with [Merger.Merge], then marshaled back to bytes.
 // Works with any serialization format (YAML, JSON, TOML, etc.) via custom marshal functions.
 //
 // Returns an empty byte slice if docs is empty. Returns an error if unmarshaling,
