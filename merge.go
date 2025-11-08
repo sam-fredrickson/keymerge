@@ -339,7 +339,8 @@ func (m *Merger) mergeValues(base, overlay any) (any, error) {
 }
 
 func (m *Merger) mergeMaps(base, overlay map[string]any) (map[string]any, error) {
-	result := make(map[string]any, len(base)+len(overlay))
+	// Pre-allocate for base size since overlay keys may overlap
+	result := make(map[string]any, len(base))
 
 	// Copy base
 	for k, v := range base {
