@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.2.0] - 2025-11-08
+
+### Added
 - Sentinel errors for each custom error type (DuplicatePrimaryKeyError, NonComparablePrimaryKeyError)
 - Fuzz tests for improved robustness testing
 
@@ -54,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependabot configuration
 - Complete documentation in README
 
-[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sam-fredrickson/keymerge/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/sam-fredrickson/keymerge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sam-fredrickson/keymerge/releases/tag/v0.1.0
