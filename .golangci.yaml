@@ -2,6 +2,7 @@ version: "2"
 linters:
   default: none
   enable:
+    - cyclop
     - errcheck
     - gocritic
     - godot
@@ -15,6 +16,10 @@ linters:
     - staticcheck
     - unused
     - usestdlibvars
+  settings:
+    cyclop:
+      max-complexity: 10
+      skip-tests: true
   exclusions:
     generated: lax
     presets:
@@ -26,6 +31,14 @@ linters:
       - third_party$
       - builtin$
       - examples$
+    rules:
+      # mergeSlices has cyclomatic complexity of 33, but splitting it into
+      # helper functions causes significant performance regression due to
+      # preventing Go compiler optimizations (inlining). The function is
+      # well-tested and complexity is acceptable for performance-critical code.
+      - linters:
+          - cyclop
+        text: "mergeSlices"
 formatters:
   enable:
     - gci
