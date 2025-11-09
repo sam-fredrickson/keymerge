@@ -4,6 +4,14 @@ This guide provides comprehensive examples and patterns for using keymerge effec
 
 ## Table of Contents
 
+- [Getting Started](#getting-started)
+  - [Type-Safe Merging](#type-safe-merging)
+  - [Dynamic Merging](#dynamic-merging)
+- [Struct Tag Reference](#struct-tag-reference)
+  - [Primary Keys](#primary-keys)
+  - [Composite Keys](#composite-keys)
+  - [List Modes](#list-modes)
+  - [Field Name Overrides](#field-name-overrides)
 - [Basic Concepts](#basic-concepts)
 - [Working with Different Formats](#working-with-different-formats)
 - [Primary Key Matching](#primary-key-matching)
@@ -13,6 +21,296 @@ This guide provides comprehensive examples and patterns for using keymerge effec
 - [Advanced Patterns](#advanced-patterns)
 - [Performance Considerations](#performance-considerations)
 - [Common Pitfalls](#common-pitfalls)
+
+## Getting Started
+
+### Type-Safe Merging
+
+For most use cases, start with `Merger[T]` which uses struct tags to control merge behavior:
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    
+    "github.com/goccy/go-yaml"
+    "github.com/sam-fredrickson/keymerge"
+)
+
+// Define your config structure with km tags
+type Config struct {
+    App      AppConfig  `yaml:"app"`
+    Database Database   `yaml:"database"`
+    Services []Service  `yaml:"services"`
+}
+
+type AppConfig struct {
+    Name    string `yaml:"name"`
+    Version string `yaml:"version"`
+}
+
+type Database struct {
+    Host string `yaml:"host"`
+    Port int    `yaml:"port"`
+}
+
+type Service struct {
+    Name     string `yaml:"name" km:"primary"`
+    Enabled  bool   `yaml:"enabled"`
+    Replicas int    `yaml:"replicas"`
+}
+
+func main() {
+    // Create typed merger
+    merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    base := []byte(`
+app:
+  name: myapp
+  version: 1.0.0
+database:
+  host: localhost
+  port: 5432
+services:
+  - name: api
+    enabled: true
+    replicas: 2
+  - name: worker
+    enabled: true
+    replicas: 1
+`)
+    
+    overlay := []byte(`
+app:
+  version: 1.1.0
+database:
+  host: prod.db.example.com
+services:
+  - name: api
+    replicas: 10
+`)
+    
+    result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    // Unmarshal into typed config
+    var config Config
+    if err := yaml.Unmarshal(result, &config); err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("App: %s v%s\n", config.App.Name, config.App.Version)
+    fmt.Printf("Database: %s:%d\n", config.Database.Host, config.Database.Port)
+    for _, svc := range config.Services {
+        fmt.Printf("Service %s: replicas=%d\n", svc.Name, svc.Replicas)
+    }
+}
+```
+
+**Benefits:**
+- Compile-time type safety
+- Self-documenting merge behavior (tags show intent)
+- Fine-grained control per field
+- No need to remember global primary key names
+
+### Dynamic Merging
+
+For truly dynamic configs where types aren't known ahead of time:
+
+```go
+import "github.com/sam-fredrickson/keymerge"
+
+opts := keymerge.Options{
+    PrimaryKeyNames: []string{"name", "id"},
+}
+
+result, err := keymerge.Merge(opts, baseData, overlayData)
+```
+
+**Use cases:**
+- Plugin systems with unknown config schemas
+- Generic config processing tools
+- Working with arbitrary JSON/YAML
+
+## Struct Tag Reference
+
+### Primary Keys
+
+Mark fields as primary keys for list item matching:
+
+```go
+type User struct {
+    ID   string `yaml:"id" km:"primary"`
+    Name string `yaml:"name"`
+    Role string `yaml:"role"`
+}
+
+type Config struct {
+    Users []User `yaml:"users"`
+}
+```
+
+When merging lists of `User`, items with matching `id` values are deep-merged:
+
+```yaml
+# base.yaml
+users:
+  - id: alice
+    name: Alice
+    role: user
+
+# overlay.yaml  
+users:
+  - id: alice
+    role: admin  # Updates Alice's role
+  - id: bob
+    name: Bob
+    role: user   # New user added
+
+# result
+users:
+  - id: alice
+    name: Alice
+    role: admin  # Merged!
+  - id: bob
+    name: Bob
+    role: user
+```
+
+### Composite Keys
+
+Multiple `km:"primary"` tags create a composite key (ALL fields must match):
+
+```go
+type Endpoint struct {
+    Region string `yaml:"region" km:"primary"`
+    Name   string `yaml:"name" km:"primary"`
+    URL    string `yaml:"url"`
+}
+
+type Config struct {
+    Endpoints []Endpoint `yaml:"endpoints"`
+}
+```
+
+Now items match only when BOTH region AND name are equal:
+
+```yaml
+# base.yaml
+endpoints:
+  - region: us-east
+    name: api
+    url: v1-east.example.com
+  - region: us-west
+    name: api
+    url: v1-west.example.com
+
+# overlay.yaml
+endpoints:
+  - region: us-east
+    name: api
+    url: v2-east.example.com  # Only updates us-east/api
+
+# result
+endpoints:
+  - region: us-east
+    name: api
+    url: v2-east.example.com  # Updated
+  - region: us-west
+    name: api
+    url: v1-west.example.com  # Unchanged (different region)
+```
+
+**Perfect for:**
+- Multi-region configs
+- Namespaced resources (namespace + name)
+- Versioned settings (version + environment)
+
+### List Modes
+
+Control how different lists are merged:
+
+```go
+type Config struct {
+    // Concatenate (default)
+    Features []string `yaml:"features"`
+    
+    // Deduplicate items
+    Tags []string `yaml:"tags" km:"mode=dedup"`
+    
+    // Replace entirely
+    Overrides []string `yaml:"overrides" km:"mode=replace"`
+    
+    // Merge duplicate primary keys together
+    Metrics []Metric `yaml:"metrics" km:"dupe=consolidate"`
+}
+```
+
+**Scalar list modes** (`km:"mode=..."`):
+- `concat` (default) - Append all items: `[a, b] + [b, c] = [a, b, b, c]`
+- `dedup` - Append and deduplicate: `[a, b] + [b, c] = [a, b, c]`
+- `replace` - Replace base with overlay: `[a, b] + [c] = [c]`
+
+**Object list modes** (`km:"dupe=..."`):
+- `unique` (default) - Error if duplicate primary keys found
+- `consolidate` - Merge items with duplicate primary keys
+
+Example with consolidate mode:
+
+```go
+type Metric struct {
+    Name string `yaml:"name" km:"primary"`
+    Tags []string `yaml:"tags" km:"mode=dedup"`
+}
+
+type Config struct {
+    Metrics []Metric `yaml:"metrics" km:"dupe=consolidate"`
+}
+```
+
+```yaml
+# base.yaml
+metrics:
+  - name: requests
+    tags: [http, api]
+  - name: requests
+    tags: [frontend]
+
+# With km:"dupe=consolidate", duplicates are merged:
+# result
+metrics:
+  - name: requests
+    tags: [http, api, frontend]  # Tags deduplicated via km:"mode=dedup"
+```
+
+### Field Name Overrides
+
+Override field name detection for non-standard serialization:
+
+```go
+type Config struct {
+    Items []string `someformat:"wtfs" km:"field=wtfs,mode=dedup"`
+}
+```
+
+Field names are auto-detected from struct tags in priority order:
+1. `km:"field=..."` override
+2. `yaml:"..."`
+3. `json:"..."`
+4. `toml:"..."`
+5. Struct field name
+
+**When to use:**
+- Custom serialization formats
+- Legacy field names that don't match conventions
+- Working with multiple serialization formats
 
 ## Basic Concepts
 

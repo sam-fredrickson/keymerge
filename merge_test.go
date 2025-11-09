@@ -1270,7 +1270,7 @@ func TestObjectListMode_String(t *testing.T) {
 }
 
 func TestNewMerger_EmptyPrimaryKeyName(t *testing.T) {
-	_, err := keymerge.NewMerger(keymerge.Options{
+	_, err := keymerge.NewUntypedMerger(keymerge.Options{
 		PrimaryKeyNames: []string{"id", "", "name"},
 	})
 

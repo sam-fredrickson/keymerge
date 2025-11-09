@@ -8,13 +8,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added `docs/guide.md` to give a more comprehensive overview of the library.
+- **Type-safe `Merger[T]`** - New primary API using generics and struct tags for fine-grained merge control
+  - `km:"primary"` tag for marking primary key fields (supports composite keys)
+  - `km:"mode=concat|dedup|replace"` for per-field scalar list merge modes
+  - `km:"dupe=unique|consolidate"` for per-field object list duplicate handling
+  - `km:"field=name"` for overriding field name detection
+  - Automatic field name detection from `yaml`, `json`, and `toml` struct tags
+  - Metadata-driven merging with path-aware context lookup
+- Composite primary key support - multiple fields marked `km:"primary"` create AND-based matching
+- `docs/guide.md` comprehensive user guide with typed and dynamic merging examples
+- New struct tag reference section in guide covering all directives
 
 ### Changed
+- **BREAKING**: Renamed `Merger` → `UntypedMerger` (for dynamic configs without known types)
+- **BREAKING**: Renamed `NewMerger()` → `NewUntypedMerger()`
+- **BREAKING**: New generic `Merger[T]` & `NewMerger[T]()` (new primary/recommended API)
+- Package-level `Merge()` and `MergeMarshal()` functions now use `UntypedMerger` (unchanged behavior)
+- Refactored typed merger code into separate `typed.go` file
+- Updated all documentation to lead with type-safe `Merger[T]` API
 - Optimize path tracking in list merging: replaced `fmt.Sprintf` with `strconv.Itoa` for ~43% speedup and ~84% reduction in allocations
+- Internal: Refactored primary key handling to use `compositeKey` type for unified single/composite key support
 
 ### Fixed
-- Remove usage of YAML library in fuzz tests.
+- Remove usage of YAML library in fuzz tests
+
+### Migration Guide
+
+**For new projects**: Use `Merger[T]` with struct tags:
+```go
+// Old approach (still works)
+opts := keymerge.Options{PrimaryKeyNames: []string{"name"}}
+result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, docs...)
+
+// New recommended approach
+type Config struct {
+    Services []Service `yaml:"services"`
+}
+type Service struct {
+    Name string `yaml:"name" km:"primary"`
+}
+merger, _ := keymerge.NewMerger[Config](keymerge.Options{})
+result, _ := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, docs...)
+```
+
+**For existing projects with dynamic configs**:
+```go
+// Before
+m, _ := keymerge.NewMerger(opts)
+
+// After
+m, _ := keymerge.NewUntypedMerger(opts)
+```
+
+Package-level `Merge()` and `MergeMarshal()` functions are unchanged.
 
 ## [0.2.0] - 2025-11-08
 

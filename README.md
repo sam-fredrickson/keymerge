@@ -28,11 +28,36 @@ go get github.com/sam-fredrickson/keymerge
 
 ## Quick Start
 
+### Type-Safe Merging (Recommended)
+
+Define your config structure with `km` tags for fine-grained control:
+
 ```go
 import (
     "github.com/sam-fredrickson/keymerge"
     "github.com/goccy/go-yaml"
 )
+
+type Config struct {
+    Database Database  `yaml:"database"`
+    Services []Service `yaml:"services"`
+}
+
+type Database struct {
+    Host     string `yaml:"host"`
+    Port     int    `yaml:"port"`
+    PoolSize int    `yaml:"pool_size"`
+}
+
+type Service struct {
+    Name     string `yaml:"name" km:"primary"`
+    Enabled  bool   `yaml:"enabled"`
+    Replicas int    `yaml:"replicas"`
+    Timeout  string `yaml:"timeout"`
+}
+
+// Create a typed merger
+merger, _ := keymerge.NewMerger[Config](keymerge.Options{})
 
 baseConfig := []byte(`
 database:
@@ -58,17 +83,17 @@ services:
     timeout: 30s
 `)
 
-opts := keymerge.Options{
-    PrimaryKeyNames: []string{"name", "id"},
-}
+result, _ := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, baseConfig, prodOverlay)
 
-result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, baseConfig, prodOverlay)
+// Unmarshal into typed config
+var config Config
+yaml.Unmarshal(result, &config)
 ```
 
 **Result:**
 ```yaml
 database:
-  host: prod.db.example.com  # overridden
+  host: prod.db.example.com   # overridden
   port: 5432                  # preserved
   pool_size: 50               # overridden
 services:
@@ -81,9 +106,50 @@ services:
     replicas: 1
 ```
 
-The `api` service was matched by `name` and deep-merged. The `worker` service was preserved as-is. Database settings were deep-merged at the map level.
+The `api` service was matched by `name` (marked with `km:"primary"`) and deep-merged. The `worker` service was preserved as-is.
+
+### Dynamic Merging
+
+For truly dynamic configs where types aren't known ahead of time:
+
+```go
+opts := keymerge.Options{
+    PrimaryKeyNames: []string{"name", "id"},
+}
+
+result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, baseConfig, prodOverlay)
+```
 
 ## Features
+
+### Struct Tag Directives
+
+Control merge behavior per field with `km` tags:
+
+```go
+type Config struct {
+    // Composite primary key (both region AND name must match)
+    Endpoints []Endpoint `yaml:"endpoints"`
+    
+    // Deduplicate tags instead of concatenating
+    Tags []string `yaml:"tags" km:"mode=dedup"`
+    
+    // Allow duplicate IDs and merge them together
+    Metrics []Metric `yaml:"metrics" km:"dupe=consolidate"`
+}
+
+type Endpoint struct {
+    Region string `yaml:"region" km:"primary"`
+    Name   string `yaml:"name" km:"primary"`
+    URL    string `yaml:"url"`
+}
+```
+
+**Available directives:**
+- `km:"primary"` - Mark field as (composite) primary key
+- `km:"mode=concat|dedup|replace"` - Scalar list merge mode
+- `km:"dupe=unique|consolidate"` - Object list duplicate handling
+- `km:"field=name"` - Override field name detection
 
 ### Format-Agnostic
 
@@ -108,10 +174,17 @@ keymerge.Merge(opts, data1, data2, data3)
 Remove items from base configs:
 
 ```go
-opts := keymerge.Options{
-    PrimaryKeyNames: []string{"name"},
-    DeleteMarkerKey: "_delete",
+type Config struct {
+    Services []Service `yaml:"services"`
 }
+
+type Service struct {
+    Name string `yaml:"name" km:"primary"`
+}
+
+merger, _ := keymerge.NewMerger[Config](keymerge.Options{
+    DeleteMarkerKey: "_delete",
+})
 
 overlay := []byte(`
 services:
@@ -122,32 +195,44 @@ services:
 
 ### Configurable List Modes
 
-**Scalar lists** (primitives without primary keys):
+Control list behavior globally or per-field:
 
 ```go
-base := []byte(`features: [auth, api, logging]`)
-overlay := []byte(`features: [api, metrics]`)
+type Config struct {
+    // This field uses concat mode
+    Features []string `yaml:"features" km:"mode=concat"`
+    
+    // This field uses dedup mode
+    Tags []string `yaml:"tags" km:"mode=dedup"`
+    
+    // This field uses replace mode
+    Envs []string `yaml:"envs" km:"mode=replace"`
+}
 
-// ScalarListConcat (default): [auth, api, logging, api, metrics]
-// ScalarListDedup: [auth, api, logging, metrics]
-// ScalarListReplace: [api, metrics]
-
+// Or set globally via Options (applies to fields without km tags)
 opts := keymerge.Options{
     ScalarListMode: keymerge.ScalarListDedup,
 }
 ```
 
-**Object lists** with duplicate primary keys:
+**Scalar list modes:**
+- `concat` (default): Append all items
+- `dedup`: Append and remove duplicates
+- `replace`: Replace base with overlay
 
+**Object list modes** (for handling duplicate primary keys):
 ```go
-// ObjectListUnique (default): returns error if duplicates found
-// ObjectListConsolidate: merges duplicates together
-
-opts := keymerge.Options{
-    PrimaryKeyNames: []string{"id"},
-    ObjectListMode:  keymerge.ObjectListConsolidate,
+type Config struct {
+    // Return error if duplicate IDs found (default)
+    Users []User `yaml:"users" km:"dupe=unique"`
+    
+    // Merge items with duplicate IDs together
+    Metrics []Metric `yaml:"metrics" km:"dupe=consolidate"`
 }
 ```
+
+- `unique` (default): Error on duplicates
+- `consolidate`: Merge duplicates together
 
 ## How It Works
 
@@ -161,7 +246,18 @@ Primary keys are checked in order from `PrimaryKeyNames`. The first matching fie
 
 ## API Reference
 
-### Core Functions
+### Typed Merging (Recommended)
+
+**`NewMerger[T any](opts Options) (*Merger[T], error)`**
+
+Creates a type-safe merger that extracts merge directives from struct tags.
+
+```go
+merger, _ := keymerge.NewMerger[Config](keymerge.Options{})
+result, _ := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, docs...)
+```
+
+### Dynamic Merging
 
 **`Merge(opts Options, docs ...any) (any, error)`**
 
@@ -170,6 +266,10 @@ Merges already-unmarshaled documents (maps, slices, primitives).
 **`MergeMarshal(opts Options, unmarshal UnmarshalFunc, marshal MarshalFunc, docs ...[]byte) ([]byte, error)`**
 
 Merges serialized byte documents using provided unmarshal/marshal functions.
+
+**`NewUntypedMerger(opts Options) (*UntypedMerger, error)`**
+
+Creates a reusable untyped merger for dynamic configs.
 
 ### Options
 

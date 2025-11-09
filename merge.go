@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"slices"
 	"strconv"
 	"strings"
 )
@@ -26,6 +25,8 @@ var (
 	ErrMarshal = errors.New("marshal error")
 	// ErrInvalidOptions indicates invalid merge options were provided.
 	ErrInvalidOptions = errors.New("invalid options")
+	// ErrInvalidTag indicates a struct tag contained an invalid directive or value.
+	ErrInvalidTag = errors.New("invalid tag")
 )
 
 // ScalarListMode specifies how to merge lists that don't have primary keys.
@@ -176,37 +177,58 @@ type Options struct {
 	ObjectListMode ObjectListMode
 }
 
-// Merger performs document merging with the configured options.
-// It tracks the current document path for detailed error reporting.
-//
-// A Merger can be safely reused for multiple merge operations.
-//
-// A Merger is not safe to use concurrently.
-type Merger struct {
-	opts  Options  // merge configuration
-	path  []string // current path in document tree for error reporting
-	index int      // current document index being processed
+// fieldMetadata contains merge directives for a specific field extracted from struct tags.
+type fieldMetadata struct {
+	// fieldName is the serialized field name (from yaml/json/toml tag or struct field name)
+	fieldName string
+	// primaryKeys lists field names that serve as composite primary keys for this object type
+	primaryKeys []string
+	// scalarListMode overrides the default scalar list merge mode
+	scalarListMode *ScalarListMode
+	// objectListMode overrides the default object list mode
+	objectListMode *ObjectListMode
+	// children contains metadata for nested struct fields (map key is the serialized field name)
+	children map[string]*fieldMetadata
 }
 
-// NewMerger creates a new [Merger] with the given options.
+// pathSegment represents one level in the document path with its associated metadata.
+type pathSegment struct {
+	name string         // field name or array index
+	meta *fieldMetadata // metadata at this path level (nil if no metadata)
+}
+
+// UntypedMerger performs document merging with the configured options.
+// It tracks the current document path for detailed error reporting.
+//
+// An UntypedMerger can be safely reused for multiple merge operations.
+//
+// An UntypedMerger is not safe to use concurrently.
+type UntypedMerger struct {
+	opts     Options        // merge configuration
+	path     []pathSegment  // current path in document tree for error reporting
+	index    int            // current document index being processed
+	metadata *fieldMetadata // root metadata for Merger (nil for untyped UntypedMerger)
+}
+
+// NewUntypedMerger creates a new [UntypedMerger] with the given options.
 // Returns an error if the options are invalid.
-func NewMerger(opts Options) (*Merger, error) {
+func NewUntypedMerger(opts Options) (*UntypedMerger, error) {
 	for _, name := range opts.PrimaryKeyNames {
 		if name == "" {
 			return nil, fmt.Errorf("%w: empty string in PrimaryKeyNames", ErrInvalidOptions)
 		}
 	}
-	return &Merger{opts: opts}, nil
+	return &UntypedMerger{opts: opts}, nil
 }
 
-// Options returns the merge options configured for this [Merger].
-func (m *Merger) Options() Options {
+// Options returns the merge options configured for this [UntypedMerger].
+func (m *UntypedMerger) Options() Options {
 	return m.opts
 }
 
-// Merge merges multiple documents. See [Merger.Merge] for details.
+// Merge merges multiple documents. See [UntypedMerger.Merge] for details.
 func Merge(opts Options, docs ...any) (any, error) {
-	m, err := NewMerger(opts)
+	m, err := NewUntypedMerger(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -214,14 +236,14 @@ func Merge(opts Options, docs ...any) (any, error) {
 }
 
 // MergeMarshal merges byte documents using provided unmarshal and marshal functions.
-// See [Merger.MergeMarshal] for details.
+// See [UntypedMerger.MergeMarshal] for details.
 func MergeMarshal(
 	opts Options,
 	unmarshal func([]byte, any) error,
 	marshal func(any) ([]byte, error),
 	docs ...[]byte,
 ) ([]byte, error) {
-	m, err := NewMerger(opts)
+	m, err := NewUntypedMerger(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +271,7 @@ func MergeMarshal(
 //	}}
 //	result, _ := Merge(opts, base, overlay)
 //	// Result: alice's role updated to "admin"
-func (m *Merger) Merge(docs ...any) (any, error) {
+func (m *UntypedMerger) Merge(docs ...any) (any, error) {
 	var result any
 	var err error
 	for i, doc := range docs {
@@ -268,7 +290,7 @@ func (m *Merger) Merge(docs ...any) (any, error) {
 
 // MergeMarshal merges byte documents using provided unmarshal and marshal functions.
 //
-// Documents are unmarshaled, merged left-to-right with [Merger.Merge], then marshaled back to bytes.
+// Documents are unmarshaled, merged left-to-right with [UntypedMerger.Merge], then marshaled back to bytes.
 // Works with any serialization format (YAML, JSON, TOML, etc.) via custom marshal functions.
 //
 // Returns an empty byte slice if docs is empty. Returns an error if unmarshaling,
@@ -282,7 +304,7 @@ func (m *Merger) Merge(docs ...any) (any, error) {
 //	base := []byte("users:\n  - name: alice\n    role: user")
 //	overlay := []byte("users:\n  - name: alice\n    role: admin")
 //	result, _ := MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
-func (m *Merger) MergeMarshal(
+func (m *UntypedMerger) MergeMarshal(
 	unmarshal func([]byte, any) error,
 	marshal func(any) ([]byte, error),
 	docs ...[]byte,
@@ -314,23 +336,57 @@ func (m *Merger) MergeMarshal(
 	return marshal(result)
 }
 
-func (m *Merger) reset(i int) {
+func (m *UntypedMerger) reset(i int) {
 	m.path = nil
 	m.index = i
 }
 
-func (m *Merger) push(path string) {
-	m.path = append(m.path, path)
+func (m *UntypedMerger) push(name string) {
+	// Fast path for untyped merger: if there's no root metadata, there can't be any child metadata
+	if m.metadata == nil {
+		m.path = append(m.path, pathSegment{name: name, meta: nil})
+		return
+	}
+
+	// Get parent metadata (last segment in path, or root if empty)
+	var parentMeta *fieldMetadata
+	if len(m.path) == 0 {
+		parentMeta = m.metadata
+	} else {
+		parentMeta = m.path[len(m.path)-1].meta
+	}
+
+	// Determine metadata for this segment
+	var segmentMeta *fieldMetadata
+	if isNumeric(name) {
+		// For array indices, keep the parent's metadata (the list metadata)
+		// This allows us to access the item type's metadata via children
+		segmentMeta = parentMeta
+	} else if parentMeta != nil && parentMeta.children != nil {
+		// For field names, navigate to child metadata
+		segmentMeta = parentMeta.children[name]
+	}
+
+	m.path = append(m.path, pathSegment{name: name, meta: segmentMeta})
 }
 
-func (m *Merger) pop() {
+func (m *UntypedMerger) pop() {
 	if len(m.path) == 0 {
-		panic("unbalanced keymerge.Merger pop")
+		panic("unbalanced keymerge.UntypedMerger pop")
 	}
 	m.path = m.path[:len(m.path)-1]
 }
 
-func (m *Merger) mergeValues(base, overlay any) (any, error) {
+// pathNames extracts just the names from the path segments for error messages.
+func (m *UntypedMerger) pathNames() []string {
+	names := make([]string, len(m.path))
+	for i, seg := range m.path {
+		names[i] = seg.name
+	}
+	return names
+}
+
+func (m *UntypedMerger) mergeValues(base, overlay any) (any, error) {
 	// If overlay is nil, keep base
 	if overlay == nil {
 		return base, nil
@@ -359,7 +415,7 @@ func (m *Merger) mergeValues(base, overlay any) (any, error) {
 	return overlay, nil
 }
 
-func (m *Merger) mergeMaps(base, overlay map[string]any) (map[string]any, error) {
+func (m *UntypedMerger) mergeMaps(base, overlay map[string]any) (map[string]any, error) {
 	// Pre-allocate for base size since overlay keys may overlap
 	result := make(map[string]any, len(base))
 
@@ -394,7 +450,7 @@ func (m *Merger) mergeMaps(base, overlay map[string]any) (map[string]any, error)
 	return result, nil
 }
 
-func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
+func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 	// Check if items have primary keys
 	if len(overlay) == 0 {
 		return base, nil
@@ -403,17 +459,23 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 	// Try to find primary key by checking overlay items until we find one.
 	// This handles cases where the first item might not have a primary key
 	// but subsequent items do.
-	primaryKey := ""
+	var hasKeys bool
 	for _, item := range overlay {
-		primaryKey = m.findPrimaryKey(item)
-		if primaryKey != "" {
+		if m.getPrimaryKey(item) != nil {
+			hasKeys = true
 			break
 		}
 	}
 
-	if primaryKey == "" {
+	if !hasKeys {
 		// No primary key found in any overlay item, merge according to ScalarListMode
-		switch m.opts.ScalarListMode {
+		scalarMode := m.opts.ScalarListMode
+		// Check metadata for override
+		if meta := m.getCurrentMetadata(); meta != nil && meta.scalarListMode != nil {
+			scalarMode = *meta.scalarListMode
+		}
+
+		switch scalarMode {
 		case ScalarListReplace:
 			return overlay, nil
 		case ScalarListDedup:
@@ -426,7 +488,13 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 		}
 	}
 
-	// Build index of items by primary key
+	// Get the object list mode for this context
+	objectMode := m.opts.ObjectListMode
+	if meta := m.getCurrentMetadata(); meta != nil && meta.objectListMode != nil {
+		objectMode = *meta.objectListMode
+	}
+
+	// Build index of items by composite primary key
 	result := make([]any, 0, len(base))
 	// resultIndex maps primary keys to positions in result.
 	// Positions remain stable during merge because we mark deletions as nil
@@ -435,7 +503,7 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 	for i, item := range base {
 		m.push(strconv.Itoa(i))
 
-		key := getPrimaryKeyValue(item, primaryKey)
+		key := m.getPrimaryKey(item)
 		if key == nil {
 			result = append(result, item)
 			m.pop()
@@ -443,31 +511,32 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 		}
 
 		// Check if key is comparable (can be used as map key)
-		if !isComparable(key) {
+		if !isKeyComparable(key) {
 			err := &NonComparablePrimaryKeyError{
-				Key:      key,
+				Key:      keyString(key),
 				Position: i,
-				Path:     slices.Clone(m.path),
+				Path:     m.pathNames(),
 				DocIndex: m.index,
 			}
 			m.pop()
 			return nil, err
 		}
 
-		existingIdx, exists := resultIndex[key]
+		mapKey := toMapKey(key)
+		existingIdx, exists := resultIndex[mapKey]
 		if !exists {
-			resultIndex[key] = len(result)
+			resultIndex[mapKey] = len(result)
 			result = append(result, item)
 			m.pop()
 			continue
 		}
 
 		// Duplicate found!
-		if m.opts.ObjectListMode == ObjectListUnique {
+		if objectMode == ObjectListUnique {
 			err := &DuplicatePrimaryKeyError{
-				Key:       key,
+				Key:       keyString(key),
 				Positions: []int{existingIdx, i},
-				Path:      slices.Clone(m.path),
+				Path:      m.pathNames(),
 				DocIndex:  m.index,
 			}
 			m.pop()
@@ -486,7 +555,7 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 	}
 
 	// Check for duplicates in overlay (if ObjectListUnique mode)
-	if m.opts.ObjectListMode == ObjectListUnique {
+	if objectMode == ObjectListUnique {
 		overlayKeys := make(map[any]int, len(overlay))
 		for i, overlayItem := range overlay {
 			m.push(strconv.Itoa(i))
@@ -495,35 +564,37 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 				m.pop()
 				continue // Skip deletion markers
 			}
-			key := getPrimaryKeyValue(overlayItem, primaryKey)
+
+			key := m.getPrimaryKey(overlayItem)
 			if key == nil {
 				m.pop()
 				continue
 			}
 
 			// Check if key is comparable
-			if !isComparable(key) {
+			if !isKeyComparable(key) {
 				err := &NonComparablePrimaryKeyError{
-					Key:      key,
+					Key:      keyString(key),
 					Position: i,
-					Path:     slices.Clone(m.path),
+					Path:     m.pathNames(),
 					DocIndex: m.index,
 				}
 				m.pop()
 				return nil, err
 			}
 
-			if firstIdx, exists := overlayKeys[key]; exists {
+			mapKey := toMapKey(key)
+			if firstIdx, exists := overlayKeys[mapKey]; exists {
 				err := &DuplicatePrimaryKeyError{
-					Key:       key,
+					Key:       keyString(key),
 					Positions: []int{firstIdx, i},
-					Path:      slices.Clone(m.path),
+					Path:      m.pathNames(),
 					DocIndex:  m.index,
 				}
 				m.pop()
 				return nil, err
 			}
-			overlayKeys[key] = i
+			overlayKeys[mapKey] = i
 			m.pop()
 		}
 	}
@@ -534,19 +605,20 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 
 		// Check if this item is marked for deletion
 		if m.isMarkedForDeletion(overlayItem) {
-			key := getPrimaryKeyValue(overlayItem, primaryKey)
+			key := m.getPrimaryKey(overlayItem)
 			if key != nil {
-				if idx, exists := resultIndex[key]; exists {
+				mapKey := toMapKey(key)
+				if idx, exists := resultIndex[mapKey]; exists {
 					// Mark for deletion by setting to nil, we'll filter later
 					result[idx] = nil
-					delete(resultIndex, key)
+					delete(resultIndex, mapKey)
 				}
 			}
 			m.pop()
 			continue
 		}
 
-		key := getPrimaryKeyValue(overlayItem, primaryKey)
+		key := m.getPrimaryKey(overlayItem)
 		if key == nil {
 			// No key, append
 			result = append(result, overlayItem)
@@ -555,18 +627,19 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 		}
 
 		// Check if key is comparable (for Consolidate mode, Unique already checked)
-		if m.opts.ObjectListMode != ObjectListUnique && !isComparable(key) {
+		if objectMode != ObjectListUnique && !isKeyComparable(key) {
 			err := &NonComparablePrimaryKeyError{
-				Key:      key,
+				Key:      keyString(key),
 				Position: i,
-				Path:     slices.Clone(m.path),
+				Path:     m.pathNames(),
 				DocIndex: m.index,
 			}
 			m.pop()
 			return nil, err
 		}
 
-		if idx, exists := resultIndex[key]; exists {
+		mapKey := toMapKey(key)
+		if idx, exists := resultIndex[mapKey]; exists {
 			// Merge with existing item
 			m.pop()                   // Pop current index before merging
 			m.push(strconv.Itoa(idx)) // Push existing index for merge
@@ -579,13 +652,13 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 		} else {
 			// Append new item
 			result = append(result, overlayItem)
-			resultIndex[key] = len(result) - 1
+			resultIndex[mapKey] = len(result) - 1
 			m.pop()
 		}
 	}
 
 	// Filter out nil items (deleted items or consolidated duplicates)
-	if m.opts.DeleteMarkerKey != "" || m.opts.ObjectListMode == ObjectListConsolidate {
+	if m.opts.DeleteMarkerKey != "" || objectMode == ObjectListConsolidate {
 		filtered := make([]any, 0, len(result))
 		for _, item := range result {
 			if item != nil {
@@ -599,7 +672,7 @@ func (m *Merger) mergeSlices(base, overlay []any) ([]any, error) {
 }
 
 // stripDeleteMarker removes the delete marker key from a value recursively.
-func (m *Merger) stripDeleteMarker(value any) any {
+func (m *UntypedMerger) stripDeleteMarker(value any) any {
 	if m.opts.DeleteMarkerKey == "" {
 		return value
 	}
@@ -625,39 +698,148 @@ func (m *Merger) stripDeleteMarker(value any) any {
 	}
 }
 
-// findPrimaryKey returns the first primary key field name found in item.
-// Returns empty string if item is not a map or no primary key field exists.
-//
-// Note: An empty string "" is technically a valid field name in Go maps,
-// but using it as a primary key name is not recommended as it cannot be
-// distinguished from the "not found" return value.
-func (m *Merger) findPrimaryKey(item any) string {
-	mp, ok := item.(map[string]any)
-	if !ok {
-		return ""
+// getCurrentMetadata returns the metadata for the current path in the document tree.
+// Returns nil if no metadata exists (untyped merger or path not in metadata tree).
+// This is O(1) since metadata is cached in the path during push().
+func (m *UntypedMerger) getCurrentMetadata() *fieldMetadata {
+	if len(m.path) == 0 {
+		return nil
 	}
-
-	for _, keyName := range m.opts.PrimaryKeyNames {
-		if _, exists := mp[keyName]; exists {
-			return keyName
-		}
-	}
-
-	return ""
+	return m.path[len(m.path)-1].meta
 }
 
-// getPrimaryKeyValue returns the value of the primary key field.
-// Returns nil if:
-//   - item is not a map
-//   - the key doesn't exist in the map
-//   - the key exists but has an explicit nil/null value (treated same as missing)
-func getPrimaryKeyValue(item any, keyName string) any {
-	m, ok := item.(map[string]any)
+// isNumeric checks if a string represents a number (array index).
+func isNumeric(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// compositeKey represents a composite primary key value for map indexing.
+//
+// When multiple fields are marked with km:"primary", ALL fields must be present
+// and match for two items to be considered the same. This enables matching on
+// combinations like {region, name} or {namespace, kind, name}.
+//
+// Values contains multiple key field values in field declaration order.
+// This type is only used for multi-field composite keys. Single-field keys
+// use the value directly without allocation.
+//
+// Example:
+//
+//	type Endpoint struct {
+//	    Region string `yaml:"region" km:"primary"`
+//	    Name   string `yaml:"name" km:"primary"`
+//	    URL    string `yaml:"url"`
+//	}
+//
+// Items match only when BOTH region AND name are equal.
+type compositeKey struct {
+	values []any
+}
+
+// getPrimaryKey extracts the primary key value from an item for use as a map key.
+// Returns nil if item is not a map or doesn't have any primary key fields.
+//
+// For single-key cases (most common), returns the key value directly (no allocation).
+// For composite keys (multiple km:"primary" tags), returns a *compositeKey that implements
+// comparable operations and string formatting.
+//
+// For metadata-defined composite keys, ALL key fields must be present.
+// For global PrimaryKeyNames (backward compatibility), returns the FIRST key that exists.
+func (m *UntypedMerger) getPrimaryKey(item any) any {
+	mp, ok := item.(map[string]any)
 	if !ok {
 		return nil
 	}
 
-	return m[keyName]
+	// Get metadata for the current path (which should be a list field)
+	meta := m.getCurrentMetadata()
+
+	// If metadata defines primary keys, this is a composite key - require ALL fields
+	// Note: meta.primaryKeys contains the keys from the item type (inherited during buildMetadata)
+	if meta != nil && len(meta.primaryKeys) > 0 {
+		// Optimize single-key case to avoid allocation
+		if len(meta.primaryKeys) == 1 {
+			val, exists := mp[meta.primaryKeys[0]]
+			if !exists || val == nil {
+				return nil
+			}
+			return val
+		}
+
+		// Multi-key case - still need compositeKey wrapper
+		values := make([]any, 0, len(meta.primaryKeys))
+		for _, keyName := range meta.primaryKeys {
+			val, exists := mp[keyName]
+			if !exists || val == nil {
+				// Missing a required key field in composite key
+				return nil
+			}
+			values = append(values, val)
+		}
+		return &compositeKey{values: values}
+	}
+
+	// Fall back to global options - use FIRST matching key (backward compatibility)
+	for _, keyName := range m.opts.PrimaryKeyNames {
+		val, exists := mp[keyName]
+		if exists && val != nil {
+			return val
+		}
+	}
+
+	return nil
+}
+
+// String returns a string representation of the composite key for error messages.
+func (ck *compositeKey) String() string {
+	return fmt.Sprintf("%v", ck.values)
+}
+
+// isComparable checks if all values in the composite key are comparable.
+func (ck *compositeKey) isComparable() bool {
+	for _, v := range ck.values {
+		if !isComparable(v) {
+			return false
+		}
+	}
+	return true
+}
+
+// keyString formats a primary key value for error messages.
+// Handles both direct values and composite keys.
+func keyString(key any) string {
+	if ck, ok := key.(*compositeKey); ok {
+		return ck.String()
+	}
+	return fmt.Sprintf("%v", key)
+}
+
+// toMapKey converts a primary key value to a map key.
+// For single values, returns the value directly.
+// For composite keys, returns a string representation.
+func toMapKey(key any) any {
+	if ck, ok := key.(*compositeKey); ok {
+		return fmt.Sprint(ck.values)
+	}
+	return key
+}
+
+// isKeyComparable checks if a primary key value is comparable.
+// For single values, checks if the value type is comparable.
+// For composite keys, checks if all component values are comparable.
+func isKeyComparable(key any) bool {
+	if ck, ok := key.(*compositeKey); ok {
+		return ck.isComparable()
+	}
+	return isComparable(key)
 }
 
 // isComparable checks if a value is comparable (can be used as a map key).
@@ -670,7 +852,7 @@ func isComparable(value any) bool {
 }
 
 // isMarkedForDeletion checks if a value has the delete marker set to true.
-func (m *Merger) isMarkedForDeletion(value any) bool {
+func (m *UntypedMerger) isMarkedForDeletion(value any) bool {
 	if m.opts.DeleteMarkerKey == "" {
 		return false
 	}
