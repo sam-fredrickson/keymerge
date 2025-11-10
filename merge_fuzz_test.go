@@ -8,7 +8,7 @@ import (
 	"github.com/sam-fredrickson/keymerge"
 )
 
-// FuzzMergeComplexStructures fuzzes the Merge function with complex nested structures.
+// FuzzMergeComplexStructures fuzzes the MergeUnstructured function with complex nested structures.
 // This tests the core merge algorithm with maps, slices, and various data types.
 func FuzzMergeComplexStructures(f *testing.F) {
 	// Seed with interesting values that will be used to build structures
@@ -44,7 +44,7 @@ func FuzzMergeComplexStructures(f *testing.F) {
 		}
 
 		// Should not panic
-		result, err := keymerge.Merge(opts, base, overlay)
+		result, err := keymerge.MergeUnstructured(opts, base, overlay)
 		if err != nil {
 			t.Skip("merge failed (expected for some inputs)")
 		}
@@ -70,7 +70,7 @@ func FuzzMergeComplexStructures(f *testing.F) {
 	})
 }
 
-// FuzzMergeDirect fuzzes the Merge function with already-unmarshaled data.
+// FuzzMergeDirect fuzzes the MergeUnstructured function with already-unmarshaled data.
 // This tests the core merge logic without YAML parsing complications.
 func FuzzMergeDirect(f *testing.F) {
 	// Seed with some basic structures
@@ -97,7 +97,7 @@ func FuzzMergeDirect(f *testing.F) {
 		}
 
 		// Should not panic
-		result, err := keymerge.Merge(opts, base, overlay)
+		result, err := keymerge.MergeUnstructured(opts, base, overlay)
 		if err != nil {
 			t.Skip("merge failed (expected for some inputs)")
 		}
@@ -136,7 +136,7 @@ func FuzzMergeWithPrimaryKeys(f *testing.F) {
 		}
 
 		// Should not panic
-		result, err := keymerge.Merge(opts, base, overlay)
+		result, err := keymerge.MergeUnstructured(opts, base, overlay)
 		if err != nil {
 			// Errors are OK (e.g., duplicate keys in Unique mode)
 			return
@@ -192,7 +192,7 @@ func FuzzMergeScalarModes(f *testing.F) {
 				ScalarListMode: mode,
 			}
 
-			result, err := keymerge.Merge(opts, base, overlay)
+			result, err := keymerge.MergeUnstructured(opts, base, overlay)
 			if err != nil {
 				t.Fatalf("merge failed with mode %d: %v", mode, err)
 			}

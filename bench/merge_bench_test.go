@@ -104,7 +104,7 @@ func BenchmarkMerge_Small(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
@@ -119,7 +119,7 @@ func BenchmarkMerge_Medium(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.MergeUnstructured(opts, docs...)
 	}
 }
 
@@ -134,7 +134,7 @@ func BenchmarkMerge_Large(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.MergeUnstructured(opts, docs...)
 	}
 }
 
@@ -174,7 +174,7 @@ func BenchmarkMerge_DeepNesting(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
@@ -191,7 +191,7 @@ func BenchmarkMerge_ListsWithoutPrimaryKeys(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
@@ -206,7 +206,7 @@ func BenchmarkMerge_ManySmallOverlays(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.MergeUnstructured(opts, docs...)
 	}
 }
 
@@ -236,7 +236,7 @@ func BenchmarkMerge_ScalarOverridesOnly(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
@@ -254,7 +254,7 @@ func BenchmarkMerge_ScalarListDedup_Small(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
@@ -280,7 +280,7 @@ func BenchmarkMerge_ScalarListDedup_Medium(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
@@ -306,7 +306,7 @@ func BenchmarkMerge_ScalarListDedup_Large(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
@@ -344,7 +344,7 @@ type TypedConfig struct {
 
 // BenchmarkTyped_Small compares typed merger with small config.
 func BenchmarkTyped_Small(b *testing.B) {
-	merger, _ := keymerge.NewMerger[TypedConfig](keymerge.Options{})
+	merger, _ := keymerge.NewMerger[TypedConfig](keymerge.Options{}, nil, nil)
 
 	// Same data structure as untyped, but typed merger has pre-built metadata
 	base := map[string]any{
@@ -361,7 +361,7 @@ func BenchmarkTyped_Small(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = merger.Merge(base, overlay)
+		_, _ = merger.MergeUnstructured(base, overlay)
 	}
 }
 
@@ -382,13 +382,13 @@ func BenchmarkUntyped_Small(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, base, overlay)
+		_, _ = keymerge.MergeUnstructured(opts, base, overlay)
 	}
 }
 
 // BenchmarkTyped_Medium compares typed merger with medium config.
 func BenchmarkTyped_Medium(b *testing.B) {
-	merger, _ := keymerge.NewMerger[TypedConfig](keymerge.Options{})
+	merger, _ := keymerge.NewMerger[TypedConfig](keymerge.Options{}, nil, nil)
 
 	// Same data as untyped version
 	base := generateLargeBase()
@@ -400,7 +400,7 @@ func BenchmarkTyped_Medium(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = merger.Merge(docs...)
+		_, _ = merger.MergeUnstructured(docs...)
 	}
 }
 
@@ -416,13 +416,13 @@ func BenchmarkUntyped_Medium(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.MergeUnstructured(opts, docs...)
 	}
 }
 
 // BenchmarkTyped_Large compares typed merger with large config.
 func BenchmarkTyped_Large(b *testing.B) {
-	merger, _ := keymerge.NewMerger[TypedConfig](keymerge.Options{})
+	merger, _ := keymerge.NewMerger[TypedConfig](keymerge.Options{}, nil, nil)
 
 	// Same data as untyped version
 	base := generateLargeBase()
@@ -434,7 +434,7 @@ func BenchmarkTyped_Large(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = merger.Merge(docs...)
+		_, _ = merger.MergeUnstructured(docs...)
 	}
 }
 
@@ -450,6 +450,6 @@ func BenchmarkUntyped_Large(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, _ = keymerge.Merge(opts, docs...)
+		_, _ = keymerge.MergeUnstructured(opts, docs...)
 	}
 }

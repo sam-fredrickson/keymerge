@@ -64,7 +64,7 @@ type Service struct {
 
 func main() {
     // Create typed merger
-    merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+    merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
     if err != nil {
         log.Fatal(err)
     }
@@ -95,7 +95,7 @@ services:
     replicas: 10
 `)
     
-    result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+    result, err := merger.Merge(base, overlay)
     if err != nil {
         log.Fatal(err)
     }
@@ -131,7 +131,7 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name", "id"},
 }
 
-result, err := keymerge.Merge(opts, baseData, overlayData)
+result, err := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, baseData, overlayData)
 ```
 
 **Use cases:**
@@ -347,7 +347,7 @@ overlay := map[string]any{
 }
 
 opts := keymerge.Options{}
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 if err != nil {
     panic(err)
 }
@@ -390,7 +390,7 @@ app:
 `)
 
 opts := keymerge.Options{}
-result, err := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
+result, err := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
 if err != nil {
     panic(err)
 }
@@ -410,7 +410,7 @@ base := []byte(`{"timeout": 30, "retries": 3}`)
 overlay := []byte(`{"retries": 5, "pool_size": 10}`)
 
 opts := keymerge.Options{}
-result, err := keymerge.MergeMarshal(opts, json.Unmarshal, json.Marshal, base, overlay)
+result, err := keymerge.Merge(opts, json.Unmarshal, json.Marshal, base, overlay)
 if err != nil {
     panic(err)
 }
@@ -438,7 +438,7 @@ host = "prod.example.com"
 `)
 
 opts := keymerge.Options{}
-result, err := keymerge.MergeMarshal(opts, toml.Unmarshal, toml.Marshal, base, overlay)
+result, err := keymerge.Merge(opts, toml.Unmarshal, toml.Marshal, base, overlay)
 if err != nil {
     panic(err)
 }
@@ -446,7 +446,7 @@ if err != nil {
 
 ### Pre-parsed Data
 
-If you've already unmarshaled your data, use `Merge()` directly:
+If you've already unmarshaled your data, use `MergeUnstructured()` directly:
 
 ```go
 var base, overlay map[string]any
@@ -454,7 +454,7 @@ var base, overlay map[string]any
 // ... unmarshal into base and overlay ...
 
 opts := keymerge.Options{}
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 if err != nil {
     panic(err)
 }
@@ -486,7 +486,7 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name"},
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.users:
 // - {name: alice, role: admin}    (merged)
@@ -521,7 +521,7 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name", "id"},
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // Both lists are matched correctly:
 // - users list uses "name" as primary key
@@ -563,7 +563,7 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name"},
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.services[0].config:
 // {timeout: 30, retries: 5, pool_size: 10}
@@ -592,7 +592,7 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"id"},
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.items:
 // - {id: 1, value: "updated"}   (merged by id)
@@ -625,7 +625,7 @@ overlay := map[string]any{
     },
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.users:
 // - {name: "alice", role: "admin"}
@@ -652,7 +652,7 @@ overlay := map[string]any{
     "timeout":   map[string]any{"_delete": true},
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result:
 // {feature_a: {enabled: true}}
@@ -682,7 +682,7 @@ overlay := map[string]any{
     },
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.items:
 // - {id: 1, value: "keep"}
@@ -707,7 +707,7 @@ opts := keymerge.Options{
 base := map[string]any{"tags": []any{"api", "service"}}
 overlay := map[string]any{"tags": []any{"production", "api"}}
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.tags: ["api", "service", "production", "api"]
 ```
@@ -724,7 +724,7 @@ opts := keymerge.Options{
 base := map[string]any{"tags": []any{"api", "service"}}
 overlay := map[string]any{"tags": []any{"production", "api"}}
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.tags: ["api", "service", "production"]
 // (second "api" was deduplicated)
@@ -742,7 +742,7 @@ opts := keymerge.Options{
 base := map[string]any{"tags": []any{"api", "service"}}
 overlay := map[string]any{"tags": []any{"production"}}
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 // result.tags: ["production"]
 ```
@@ -773,7 +773,7 @@ overlay := map[string]any{
     },
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 // err is DuplicatePrimaryKeyError
 // (id: 2 appears twice in the overlay document)
 ```
@@ -788,7 +788,7 @@ doc1 := map[string]any{
 doc2 := map[string]any{
     "items": []any{map[string]any{"id": 1, "b": 2}},
 }
-result, _ := keymerge.Merge(opts, doc1, doc2)
+result, _ := keymerge.MergeUnstructured(opts, doc1, doc2)
 // result.items: [{id: 1, a: 1, b: 2}] - merged together
 ```
 
@@ -814,7 +814,7 @@ overlay := map[string]any{
     },
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 // No error!
 // result.items:
 // - {id: 1, a: 1}
@@ -854,7 +854,7 @@ overlay := map[string]any{
     },
 }
 
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 if err != nil {
     // Check error type
     if errors.Is(err, keymerge.ErrDuplicatePrimaryKey) {
@@ -890,7 +890,7 @@ base := map[string]any{
     },
 }
 
-result, err := keymerge.Merge(opts, base)
+result, err := keymerge.MergeUnstructured(opts, base)
 if err != nil {
     if errors.Is(err, keymerge.ErrNonComparablePrimaryKey) {
         var ncErr *keymerge.NonComparablePrimaryKeyError
@@ -915,7 +915,7 @@ opts := keymerge.Options{}
 
 invalidYAML := []byte(`this is not: [valid: yaml`)
 
-result, err := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, invalidYAML)
+result, err := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, invalidYAML)
 if err != nil {
     if errors.Is(err, keymerge.ErrMarshal) {
         var marshalErr *keymerge.MarshalError
@@ -937,7 +937,7 @@ if err != nil {
 
 ```go
 // Validate options once, reuse merger
-merger, err := keymerge.NewMerger(opts)
+merger, err := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
 if err != nil {
     return fmt.Errorf("invalid merge options: %w", err)
 }
@@ -966,15 +966,15 @@ opts := keymerge.Options{
     ScalarListMode:  keymerge.ScalarListDedup,
 }
 
-merger, err := keymerge.NewMerger(opts)
+merger, err := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
 if err != nil {
     panic(err) // Invalid options
 }
 
 // Reuse merger for multiple merge operations
-result1, err := merger.Merge(configSet1...)
-result2, err := merger.Merge(configSet2...)
-result3, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, yamlDocs...)
+result1, err := merger.Merge(firstDocs...)
+result2, err := merger.Merge(secondDocs...)
+result3, err := merger.Merge(thirdDocs...)
 ```
 
 **Note:** `Merger` is not thread-safe. Create separate instances for concurrent use.
@@ -993,14 +993,12 @@ opts := keymerge.Options{
     DeleteMarkerKey: "_delete",
 }
 
-final, err := keymerge.MergeMarshal(
-    opts,
-    yaml.Unmarshal,
-    yaml.Marshal,
-    baseConfig,
-    envConfig,
-    userConfig,
-)
+merger, err := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
+if err != nil {
+    panic(err)
+}
+
+final, err := merger.Merge(baseConfig, envConfig, userConfig)
 ```
 
 ### Conditional Features
@@ -1031,7 +1029,8 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name"},
 }
 
-result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
+merger, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
+result, _ := merger.Merge(base, overlay)
 ```
 
 ### Kubernetes Manifest Merging
@@ -1078,7 +1077,8 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name"},
 }
 
-result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, baseManifest, prodOverlay)
+merger, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
+result, _ := merger.Merge(baseManifest, prodOverlay)
 ```
 
 ### Feature Flags with Overrides
@@ -1122,7 +1122,8 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name"},
 }
 
-result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, rollout)
+merger, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
+result, _ := merger.Merge(base, rollout)
 
 var config Config
 yaml.Unmarshal(result, &config)
@@ -1146,14 +1147,14 @@ Creating a `Merger` validates options once. Reuse it for multiple merges:
 
 ```go
 // Good - validate once
-merger, _ := keymerge.NewMerger(opts)
+merger, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
 for _, configSet := range manySets {
     result, _ := merger.Merge(configSet...)
 }
 
 // Less efficient - validates every time
 for _, configSet := range manySets {
-    result, _ := keymerge.Merge(opts, configSet...)
+    result, _ := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, configSet...)
 }
 ```
 
@@ -1168,12 +1169,13 @@ yaml.Unmarshal(baseYAML, &baseData)
 yaml.Unmarshal(overlay1YAML, &overlay1Data)
 yaml.Unmarshal(overlay2YAML, &overlay2Data)
 
-result1, _ := keymerge.Merge(opts, baseData, overlay1Data)
-result2, _ := keymerge.Merge(opts, baseData, overlay2Data)
+opts := keymerge.Options{}
+result1, _ := keymerge.MergeUnstructured(opts, baseData, overlay1Data)
+result2, _ := keymerge.MergeUnstructured(opts, baseData, overlay2Data)
 
 // Less efficient - unmarshals base twice
-result1, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, baseYAML, overlay1YAML)
-result2, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, baseYAML, overlay2YAML)
+result1, _ := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, baseYAML, overlay1YAML)
+result2, _ := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, baseYAML, overlay2YAML)
 ```
 
 ### Scalar List Dedup Performance
@@ -1184,7 +1186,7 @@ result2, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, baseYAML
 // Fast - strings are comparable
 opts := keymerge.Options{ScalarListMode: keymerge.ScalarListDedup}
 base := map[string]any{"tags": []any{"a", "b", "c", "a"}}
-result, _ := keymerge.Merge(opts, base)
+result, _ := keymerge.MergeUnstructured(opts, base)
 
 // Won't work - maps are not comparable
 base := map[string]any{"items": []any{
@@ -1224,12 +1226,12 @@ overlay := map[string]any{
         map[string]any{"name": "alice", "role": "admin"},
     },
 }
-result, _ := keymerge.Merge(opts, base, overlay)
+result, _ := keymerge.MergeUnstructured(opts, base, overlay)
 // result.users has 2 items: [{name: alice, role: user}, {name: alice, role: admin}]
 
 // Correct - lists are matched by name
 opts := keymerge.Options{PrimaryKeyNames: []string{"name"}}
-result, _ := keymerge.Merge(opts, base, overlay)
+result, _ := keymerge.MergeUnstructured(opts, base, overlay)
 // result.users has 1 item: [{name: alice, role: admin}]
 ```
 
@@ -1248,7 +1250,7 @@ base := map[string]any{
         },
     },
 }
-result, err := keymerge.Merge(opts, base)
+result, err := keymerge.MergeUnstructured(opts, base)
 // err is NonComparablePrimaryKeyError
 
 // Correct - use a string/number/bool field
@@ -1317,15 +1319,15 @@ overlay := map[string]any{
 ### 5. Merger is Not Thread-Safe
 
 ```go
-merger, _ := keymerge.NewMerger(opts)
+merger, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
 
 // Wrong - race condition
 go merger.Merge(docs1...)
 go merger.Merge(docs2...)
 
 // Correct - separate instances or synchronization
-merger1, _ := keymerge.NewMerger(opts)
-merger2, _ := keymerge.NewMerger(opts)
+merger1, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
+merger2, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
 go merger1.Merge(docs1...)
 go merger2.Merge(docs2...)
 ```
@@ -1339,10 +1341,10 @@ doc1 := map[string]any{"value": 1}
 doc2 := map[string]any{"value": 2}
 doc3 := map[string]any{"value": 3}
 
-result, _ := keymerge.Merge(opts, doc1, doc2, doc3)
+result, _ := keymerge.MergeUnstructured(opts, doc1, doc2, doc3)
 // result.value = 3
 
-result, _ := keymerge.Merge(opts, doc3, doc2, doc1)
+result, _ := keymerge.MergeUnstructured(opts, doc3, doc2, doc1)
 // result.value = 1
 ```
 
@@ -1360,7 +1362,7 @@ opts := keymerge.Options{
 doc1 := map[string]any{"items": []any{map[string]any{"id": 1, "a": 1}}}
 doc2 := map[string]any{"items": []any{map[string]any{"id": 1, "b": 2}}}
 
-result, _ := keymerge.Merge(opts, doc1, doc2)
+result, _ := keymerge.MergeUnstructured(opts, doc1, doc2)
 // result.items: [{id: 1, a: 1, b: 2}] - No error, items merged
 
 // But duplicates WITHIN a document are errors in Unique mode
@@ -1371,12 +1373,12 @@ overlay := map[string]any{
         map[string]any{"id": 1, "b": 2}, // Duplicate within overlay!
     },
 }
-result, err := keymerge.Merge(opts, base, overlay)
+result, err := keymerge.MergeUnstructured(opts, base, overlay)
 // err is DuplicatePrimaryKeyError
 
 // Use ObjectListConsolidate to allow internal duplicates
 opts.ObjectListMode = keymerge.ObjectListConsolidate
-result, _ = keymerge.Merge(opts, base, overlay)
+result, _ = keymerge.MergeUnstructured(opts, base, overlay)
 // result.items: [{id: 1, a: 1, b: 2}] - Internal duplicates consolidated
 ```
 

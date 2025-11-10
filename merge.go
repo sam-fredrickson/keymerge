@@ -204,21 +204,26 @@ type pathSegment struct {
 //
 // An UntypedMerger is not safe to use concurrently.
 type UntypedMerger struct {
-	opts     Options        // merge configuration
-	path     []pathSegment  // current path in document tree for error reporting
-	index    int            // current document index being processed
-	metadata *fieldMetadata // root metadata for Merger (nil for untyped UntypedMerger)
+	opts      Options        // merge configuration
+	path      []pathSegment  // current path in document tree for error reporting
+	index     int            // current document index being processed
+	metadata  *fieldMetadata // root metadata for Merger (nil for untyped UntypedMerger)
+	unmarshal func([]byte, any) error
+	marshal   func(any) ([]byte, error)
 }
 
 // NewUntypedMerger creates a new [UntypedMerger] with the given options.
 // Returns an error if the options are invalid.
-func NewUntypedMerger(opts Options) (*UntypedMerger, error) {
+func NewUntypedMerger(opts Options,
+	unmarshal func([]byte, any) error,
+	marshal func(any) ([]byte, error),
+) (*UntypedMerger, error) {
 	for _, name := range opts.PrimaryKeyNames {
 		if name == "" {
 			return nil, fmt.Errorf("%w: empty string in PrimaryKeyNames", ErrInvalidOptions)
 		}
 	}
-	return &UntypedMerger{opts: opts}, nil
+	return &UntypedMerger{opts: opts, marshal: marshal, unmarshal: unmarshal}, nil
 }
 
 // Options returns the merge options configured for this [UntypedMerger].
@@ -226,31 +231,32 @@ func (m *UntypedMerger) Options() Options {
 	return m.opts
 }
 
-// Merge merges multiple documents. See [UntypedMerger.Merge] for details.
-func Merge(opts Options, docs ...any) (any, error) {
-	m, err := NewUntypedMerger(opts)
+// MergeUnstructured merges multiple documents. See [UntypedMerger.MergeUnstructured] for details.
+func MergeUnstructured(opts Options, docs ...any,
+) (any, error) {
+	m, err := NewUntypedMerger(opts, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return m.MergeUnstructured(docs...)
+}
+
+// Merge merges byte documents using provided unmarshal and marshal functions.
+// See [UntypedMerger.Merge] for details.
+func Merge(
+	opts Options,
+	unmarshal func([]byte, any) error,
+	marshal func(any) ([]byte, error),
+	docs ...[]byte,
+) ([]byte, error) {
+	m, err := NewUntypedMerger(opts, unmarshal, marshal)
 	if err != nil {
 		return nil, err
 	}
 	return m.Merge(docs...)
 }
 
-// MergeMarshal merges byte documents using provided unmarshal and marshal functions.
-// See [UntypedMerger.MergeMarshal] for details.
-func MergeMarshal(
-	opts Options,
-	unmarshal func([]byte, any) error,
-	marshal func(any) ([]byte, error),
-	docs ...[]byte,
-) ([]byte, error) {
-	m, err := NewUntypedMerger(opts)
-	if err != nil {
-		return nil, err
-	}
-	return m.MergeMarshal(unmarshal, marshal, docs...)
-}
-
-// Merge merges multiple documents left-to-right, with later documents taking precedence.
+// MergeUnstructured merges multiple documents left-to-right, with later documents taking precedence.
 //
 // Maps are deep-merged recursively. Lists are merged by primary key if items contain
 // a primary key field; otherwise merged according to [ScalarListMode]. Scalar values
@@ -269,9 +275,9 @@ func MergeMarshal(
 //	overlay := map[string]any{"users": []any{
 //		map[string]any{"name": "alice", "role": "admin"},
 //	}}
-//	result, _ := Merge(opts, base, overlay)
+//	result, _ := MergeUnstructured(opts, base, overlay)
 //	// Result: alice's role updated to "admin"
-func (m *UntypedMerger) Merge(docs ...any) (any, error) {
+func (m *UntypedMerger) MergeUnstructured(docs ...any) (any, error) {
 	var result any
 	var err error
 	for i, doc := range docs {
@@ -288,9 +294,9 @@ func (m *UntypedMerger) Merge(docs ...any) (any, error) {
 	return result, nil
 }
 
-// MergeMarshal merges byte documents using provided unmarshal and marshal functions.
+// Merge merges byte documents using provided unmarshal and marshal functions.
 //
-// Documents are unmarshaled, merged left-to-right with [UntypedMerger.Merge], then marshaled back to bytes.
+// Documents are unmarshaled, merged left-to-right with [UntypedMerger.MergeUnstructured], then marshaled back to bytes.
 // Works with any serialization format (YAML, JSON, TOML, etc.) via custom marshal functions.
 //
 // Returns an empty byte slice if docs is empty. Returns an error if unmarshaling,
@@ -303,21 +309,22 @@ func (m *UntypedMerger) Merge(docs ...any) (any, error) {
 //	opts := Options{PrimaryKeyNames: []string{"name"}}
 //	base := []byte("users:\n  - name: alice\n    role: user")
 //	overlay := []byte("users:\n  - name: alice\n    role: admin")
-//	result, _ := MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
-func (m *UntypedMerger) MergeMarshal(
-	unmarshal func([]byte, any) error,
-	marshal func(any) ([]byte, error),
+//	result, _ := Merge(opts, yaml.Unmarshal, yaml.Marshal, base, overlay)
+func (m *UntypedMerger) Merge(
 	docs ...[]byte,
 ) ([]byte, error) {
 	if len(docs) == 0 {
 		return []byte{}, nil
+	}
+	if m.unmarshal == nil || m.marshal == nil {
+		return nil, fmt.Errorf("cannot merge unstructured documents without a unmarshal function")
 	}
 
 	// Parse all documents
 	parsedDocs := make([]any, len(docs))
 	for i, doc := range docs {
 		var current any
-		if err := unmarshal(doc, &current); err != nil {
+		if err := m.unmarshal(doc, &current); err != nil {
 			return nil, &MarshalError{
 				Err:      err,
 				DocIndex: i,
@@ -326,14 +333,14 @@ func (m *UntypedMerger) MergeMarshal(
 		parsedDocs[i] = current
 	}
 
-	// Merge
-	result, err := m.Merge(parsedDocs...)
+	// MergeUnstructured
+	result, err := m.MergeUnstructured(parsedDocs...)
 	if err != nil {
 		return nil, err
 	}
 
 	// Marshal back
-	return marshal(result)
+	return m.marshal(result)
 }
 
 func (m *UntypedMerger) reset(i int) {
@@ -424,7 +431,7 @@ func (m *UntypedMerger) mergeMaps(base, overlay map[string]any) (map[string]any,
 		result[k] = v
 	}
 
-	// Merge overlay
+	// MergeUnstructured overlay
 	for k, v := range overlay {
 		m.push(k)
 
@@ -599,7 +606,7 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 		}
 	}
 
-	// Merge overlay items
+	// MergeUnstructured overlay items
 	for i, overlayItem := range overlay {
 		m.push(strconv.Itoa(i))
 
@@ -640,7 +647,7 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 
 		mapKey := toMapKey(key)
 		if idx, exists := resultIndex[mapKey]; exists {
-			// Merge with existing item
+			// MergeUnstructured with existing item
 			m.pop()                   // Pop current index before merging
 			m.push(strconv.Itoa(idx)) // Push existing index for merge
 			merged, err := m.mergeValues(result[idx], overlayItem)

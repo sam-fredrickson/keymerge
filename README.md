@@ -56,8 +56,8 @@ type Service struct {
     Timeout  string `yaml:"timeout"`
 }
 
-// Create a typed merger
-merger, _ := keymerge.NewMerger[Config](keymerge.Options{})
+// Create a typed merger with marshal functions
+merger, _ := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 
 baseConfig := []byte(`
 database:
@@ -83,7 +83,7 @@ services:
     timeout: 30s
 `)
 
-result, _ := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, baseConfig, prodOverlay)
+result, _ := merger.Merge(baseConfig, prodOverlay)
 
 // Unmarshal into typed config
 var config Config
@@ -117,7 +117,7 @@ opts := keymerge.Options{
     PrimaryKeyNames: []string{"name", "id"},
 }
 
-result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, baseConfig, prodOverlay)
+result, _ := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, baseConfig, prodOverlay)
 ```
 
 ## Features
@@ -157,16 +157,16 @@ Works with any serialization format by accepting unmarshal/marshal functions:
 
 ```go
 // YAML
-keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, docs...)
+keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, docs...)
 
 // JSON
-keymerge.MergeMarshal(opts, json.Unmarshal, json.Marshal, docs...)
+keymerge.Merge(opts, json.Unmarshal, json.Marshal, docs...)
 
 // TOML
-keymerge.MergeMarshal(opts, toml.Unmarshal, toml.Marshal, docs...)
+keymerge.Merge(opts, toml.Unmarshal, toml.Marshal, docs...)
 
 // Already unmarshaled data
-keymerge.Merge(opts, data1, data2, data3)
+keymerge.MergeUnstructured(opts, data1, data2, data3)
 ```
 
 ### Deletion Support
@@ -184,7 +184,7 @@ type Service struct {
 
 merger, _ := keymerge.NewMerger[Config](keymerge.Options{
     DeleteMarkerKey: "_delete",
-})
+}, yaml.Unmarshal, yaml.Marshal)
 
 overlay := []byte(`
 services:
@@ -248,28 +248,28 @@ Primary keys are checked in order from `PrimaryKeyNames`. The first matching fie
 
 ### Typed Merging (Recommended)
 
-**`NewMerger[T any](opts Options) (*Merger[T], error)`**
+**`NewMerger[T any](opts Options, unmarshal func([]byte, any) error, marshal func(any) ([]byte, error)) (*Merger[T], error)`**
 
 Creates a type-safe merger that extracts merge directives from struct tags.
 
 ```go
-merger, _ := keymerge.NewMerger[Config](keymerge.Options{})
-result, _ := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, docs...)
+merger, _ := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
+result, _ := merger.Merge(docs...)
 ```
 
 ### Dynamic Merging
 
-**`Merge(opts Options, docs ...any) (any, error)`**
-
-Merges already-unmarshaled documents (maps, slices, primitives).
-
-**`MergeMarshal(opts Options, unmarshal UnmarshalFunc, marshal MarshalFunc, docs ...[]byte) ([]byte, error)`**
+**`Merge(opts Options, unmarshal func([]byte, any) error, marshal func(any) ([]byte, error), docs ...[]byte) ([]byte, error)`**
 
 Merges serialized byte documents using provided unmarshal/marshal functions.
 
-**`NewUntypedMerger(opts Options) (*UntypedMerger, error)`**
+**`MergeUnstructured(opts Options, docs ...any) (any, error)`**
 
-Creates a reusable untyped merger for dynamic configs.
+Merges already-unmarshaled documents (maps, slices, primitives).
+
+**`NewUntypedMerger(opts Options, unmarshal func([]byte, any) error, marshal func(any) ([]byte, error)) (*UntypedMerger, error)`**
+
+Creates a reusable untyped merger for dynamic configs. Pass `nil, nil` for marshal functions if only using `MergeUnstructured()`.
 
 ### Options
 

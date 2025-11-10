@@ -25,7 +25,7 @@ func TestMerger_CompositePrimaryKey(t *testing.T) {
 		Endpoints []Endpoint `yaml:"endpoints"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ endpoints:
     url: v2.example.com
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestMerger_ScalarListModes(t *testing.T) {
 		Replace []string `yaml:"replace" km:"mode=replace"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ dedup: [b, c, d]
 replace: [x, y]
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestMerger_ObjectListModes(t *testing.T) {
 		ConsolidateItems []Item `yaml:"consolidate" km:"dupe=consolidate"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ consolidate:
     value: 3
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestMerger_NestedStructs(t *testing.T) {
 		Services []Service `yaml:"services"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ services:
         host: redis.example.com
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +293,7 @@ func TestMerger_CustomFieldName(t *testing.T) {
 		Items []string `someformat:"wtfs" km:"field=wtfs,mode=dedup"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestMerger_CustomFieldName(t *testing.T) {
 	base := []byte(`wtfs: [a, b]`)
 	overlay := []byte(`wtfs: [b, c]`)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +326,7 @@ func TestMerger_InvalidTag(t *testing.T) {
 		Items []string `yaml:"items" km:"invalid=value"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for invalid km tag")
 	}
@@ -362,7 +362,7 @@ func TestMerger_GlobalOptionsFallback(t *testing.T) {
 	// Use global PrimaryKeyNames since no km tags on Item
 	merger, err := keymerge.NewMerger[Config](keymerge.Options{
 		PrimaryKeyNames: []string{"name"},
-	})
+	}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +379,7 @@ items:
     value: 2
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +406,7 @@ func TestMerger_FieldNameDetection(t *testing.T) {
 		Items     []string `yaml:"items" km:"mode=concat"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,7 +421,7 @@ yaml_name: a2
 items: [y]
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +449,7 @@ func TestMerger_InvalidScalarListMode(t *testing.T) {
 		Items []string `yaml:"items" km:"mode=invalid"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for invalid scalar list mode")
 	}
@@ -481,7 +481,7 @@ func TestMerger_InvalidObjectListMode(t *testing.T) {
 		Items []Item `yaml:"items" km:"dupe=invalid"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for invalid object list mode")
 	}
@@ -510,7 +510,7 @@ func TestMerger_FieldNameDetection_JSON(t *testing.T) {
 		Items     []string `json:"items" km:"mode=concat"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -525,7 +525,7 @@ json_name: a2
 items: [y]
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -554,7 +554,7 @@ func TestMerger_FieldNameDetection_TOML(t *testing.T) {
 		Items     []string `toml:"items" yaml:"items" km:"mode=concat"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +571,7 @@ toml_name: a2
 items: [y]
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -598,7 +598,7 @@ func TestMerger_FieldNameDetection_Yaml_Over_Json(t *testing.T) {
 		Field string `yaml:"yaml_name" json:"json_name"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -607,7 +607,7 @@ func TestMerger_FieldNameDetection_Yaml_Over_Json(t *testing.T) {
 	base := []byte(`yaml_name: base`)
 	overlay := []byte(`yaml_name: overlay`)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -628,7 +628,7 @@ func TestMerger_FieldNameDetection_Json_Over_Toml(t *testing.T) {
 		Field string `json:"json_name" toml:"toml_name" yaml:"json_name"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -637,7 +637,7 @@ func TestMerger_FieldNameDetection_Json_Over_Toml(t *testing.T) {
 	base := []byte(`json_name: base`)
 	overlay := []byte(`json_name: overlay`)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -668,7 +668,7 @@ func TestMerger_FieldNameDetection_Priority(t *testing.T) {
 		Field5 string `yaml:"Field5"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -689,7 +689,7 @@ toml_name: v4_new
 Field5: v5_new
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -729,7 +729,7 @@ func TestMerger_CompositePrimaryKey_MissingField(t *testing.T) {
 		Endpoints []Endpoint `yaml:"endpoints"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -748,7 +748,7 @@ endpoints:
     url: v2.example.com
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -782,7 +782,7 @@ func TestMerger_FieldNameDetection_WithModifiers(t *testing.T) {
 		Items  []string `yaml:"items,flow" km:"mode=concat"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -799,7 +799,7 @@ other_name: b2
 items: [y]
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -837,7 +837,7 @@ func TestMerger_DeleteWithCompositePrimaryKey(t *testing.T) {
 
 	merger, err := keymerge.NewMerger[Config](keymerge.Options{
 		DeleteMarkerKey: "_delete",
-	})
+	}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -859,7 +859,7 @@ endpoints:
     _delete: true
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -891,7 +891,7 @@ func TestMerger_CompositePrimaryKey_NonComparable(t *testing.T) {
 		Endpoints []Endpoint `yaml:"endpoints"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for non-comparable composite key type")
 	}
@@ -937,7 +937,7 @@ func TestMerger_DeeplyNestedStructs(t *testing.T) {
 		Services []Service `yaml:"services"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -969,7 +969,7 @@ services:
             value: "100"
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1028,7 +1028,7 @@ func TestInvalidTagError_UnknownDirective(t *testing.T) {
 		Items []string `yaml:"items" km:"unknown_directive"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for unknown km tag directive")
 	}
@@ -1058,7 +1058,7 @@ func TestInvalidTagError_InvalidScalarMode_Typo(t *testing.T) {
 		Items []string `yaml:"items" km:"mode=concat_typo"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for invalid mode")
 	}
@@ -1085,7 +1085,7 @@ func TestInvalidTagError_InvalidScalarMode_Uppercase(t *testing.T) {
 		Items []string `yaml:"items" km:"mode=CONCAT"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for uppercase mode")
 	}
@@ -1113,7 +1113,7 @@ func TestInvalidTagError_InvalidObjectListMode_Typo(t *testing.T) {
 		Items []Item `yaml:"items" km:"dupe=uniqu"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for invalid dupe mode")
 	}
@@ -1144,7 +1144,7 @@ func TestInvalidTagError_InvalidObjectListMode_Uppercase(t *testing.T) {
 		Items []Item `yaml:"items" km:"dupe=CONSOLIDATE"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for uppercase dupe mode")
 	}
@@ -1168,7 +1168,7 @@ func TestInvalidTagError_HelpfulMessage(t *testing.T) {
 		BadMode []string `yaml:"items" km:"mode=badvalue"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 
 	var tagErr *keymerge.InvalidTagError
 	if !errors.As(err, &tagErr) {
@@ -1192,7 +1192,7 @@ func TestInvalidTagError_MultipleDirectives(t *testing.T) {
 		Items []string `yaml:"items" km:"mode=concat,badname=value"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for invalid directive in multi-directive tag")
 	}
@@ -1214,7 +1214,7 @@ func TestInvalidTagError_IsSentinel(t *testing.T) {
 		Items []string `yaml:"items" km:"mode=badmode"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -1263,7 +1263,7 @@ func TestMerger_CompositePrimaryKey_ThreeFields(t *testing.T) {
 		Records []Record `yaml:"records"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1292,7 +1292,7 @@ records:
     value: v3
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1339,7 +1339,7 @@ func TestMerger_CompositePrimaryKey_MixedTypes(t *testing.T) {
 		Endpoints []Endpoint `yaml:"endpoints"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1364,7 +1364,7 @@ endpoints:
     url: v2.example.com
 `)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1456,12 +1456,12 @@ items:
 				Items []Item `yaml:"items"`
 			}
 
-			merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+			merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, tc.base, tc.overlay)
+			result, err := merger.Merge(tc.base, tc.overlay)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1488,7 +1488,7 @@ func TestMerger_FieldName_YamlOmitempty(t *testing.T) {
 		FieldName string `yaml:"field_name,omitempty"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1496,7 +1496,7 @@ func TestMerger_FieldName_YamlOmitempty(t *testing.T) {
 	base := []byte(`field_name: base_value`)
 	overlay := []byte(`field_name: overlay_value`)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1517,7 +1517,7 @@ func TestMerger_FieldName_KmFieldOverride(t *testing.T) {
 		Field string `yaml:"yaml_name" km:"field=custom_name"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1525,7 +1525,7 @@ func TestMerger_FieldName_KmFieldOverride(t *testing.T) {
 	base := []byte(`custom_name: base`)
 	overlay := []byte(`custom_name: overlay`)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1547,7 +1547,7 @@ func TestMerger_FieldName_StructFieldFallback(t *testing.T) {
 		MyField string `yaml:"MyField"`
 	}
 
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1556,7 +1556,7 @@ func TestMerger_FieldName_StructFieldFallback(t *testing.T) {
 	base := []byte(`MyField: base`)
 	overlay := []byte(`MyField: overlay`)
 
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1581,7 +1581,7 @@ func TestMerger_NonComparablePrimaryKeyType_Slice(t *testing.T) {
 		Endpoints []Endpoint `yaml:"endpoints"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for slice primary key type")
 	}
@@ -1613,7 +1613,7 @@ func TestMerger_NonComparablePrimaryKeyType_Map(t *testing.T) {
 		Endpoints []Endpoint `yaml:"endpoints"`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for map primary key type")
 	}
@@ -1641,7 +1641,7 @@ func TestMerger_InvalidFieldName_Empty(t *testing.T) {
 		Items []string `yaml:"items" km:"field="`
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{})
+	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err == nil {
 		t.Fatal("expected error for empty field name")
 	}

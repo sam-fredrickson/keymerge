@@ -17,7 +17,7 @@ import (
 
 // Test helpers for YAML-specific merging.
 func mergeYAML(docs ...[]byte) ([]byte, error) {
-	return keymerge.MergeMarshal(
+	return keymerge.Merge(
 		keymerge.Options{
 			PrimaryKeyNames: []string{"name", "id"},
 		},
@@ -25,7 +25,7 @@ func mergeYAML(docs ...[]byte) ([]byte, error) {
 }
 
 func mergeYAMLWith(opts keymerge.Options, docs ...[]byte) ([]byte, error) {
-	return keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, docs...)
+	return keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, docs...)
 }
 
 type testConfig struct {
@@ -710,7 +710,7 @@ func TestScalarListMode_DedupComplexTypes(t *testing.T) {
 		},
 	}
 
-	result, err := keymerge.Merge(keymerge.Options{
+	result, err := keymerge.MergeUnstructured(keymerge.Options{
 		ScalarListMode: keymerge.ScalarListDedup,
 	}, base, overlay)
 	if err != nil {
@@ -1031,7 +1031,7 @@ func TestNonComparablePrimaryKey_Map(t *testing.T) {
 		},
 	}
 
-	_, err := keymerge.Merge(keymerge.Options{
+	_, err := keymerge.MergeUnstructured(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
 	}, base, overlay)
 
@@ -1075,7 +1075,7 @@ func TestNonComparablePrimaryKey_Slice(t *testing.T) {
 		},
 	}
 
-	_, err := keymerge.Merge(keymerge.Options{
+	_, err := keymerge.MergeUnstructured(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
 		ObjectListMode:  keymerge.ObjectListConsolidate,
 	}, base, overlay)
@@ -1115,7 +1115,7 @@ users:
 		t.Fatal(err)
 	}
 
-	_, err := keymerge.Merge(keymerge.Options{
+	_, err := keymerge.MergeUnstructured(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
 	}, baseData, overlay)
 
@@ -1217,7 +1217,7 @@ func TestNestedArrayErrorPath(t *testing.T) {
 		PrimaryKeyNames: []string{"name", "id"},
 	}
 
-	_, err := keymerge.Merge(opts, base, overlay)
+	_, err := keymerge.MergeUnstructured(opts, base, overlay)
 	if err == nil {
 		t.Fatal("expected error for non-comparable primary key in nested array")
 	}
@@ -1272,7 +1272,7 @@ func TestObjectListMode_String(t *testing.T) {
 func TestNewMerger_EmptyPrimaryKeyName(t *testing.T) {
 	_, err := keymerge.NewUntypedMerger(keymerge.Options{
 		PrimaryKeyNames: []string{"id", "", "name"},
-	})
+	}, nil, nil)
 
 	if err == nil {
 		t.Fatal("expected error for empty string in PrimaryKeyNames, got nil")
@@ -1288,7 +1288,7 @@ func TestNewMerger_EmptyPrimaryKeyName(t *testing.T) {
 }
 
 func TestMerge_EmptyPrimaryKeyName(t *testing.T) {
-	_, err := keymerge.Merge(keymerge.Options{
+	_, err := keymerge.MergeUnstructured(keymerge.Options{
 		PrimaryKeyNames: []string{""},
 	}, map[string]any{"a": 1})
 

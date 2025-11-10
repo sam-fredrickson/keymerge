@@ -98,8 +98,8 @@ func (e *InvalidTagError) Is(target error) bool {
 //		URL  string `yaml:"url"`
 //	}
 //
-//	merger, _ := NewMerger[Config](Options{})
-//	result, _ := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, doc1, doc2)
+//	merger, _ := NewMerger[Config](Options{}, yaml.Unmarshal, yaml.Marshal)
+//	result, _ := merger.Merge(doc1, doc2)
 type Merger[T any] struct {
 	*UntypedMerger
 }
@@ -110,8 +110,11 @@ type Merger[T any] struct {
 // The Options provide default behavior for fields without specific tags.
 //
 // Returns an error if the options are invalid or if struct tags contain invalid directives.
-func NewMerger[T any](opts Options) (*Merger[T], error) {
-	merger, err := NewUntypedMerger(opts)
+func NewMerger[T any](opts Options,
+	unmarshal func([]byte, any) error,
+	marshal func(any) ([]byte, error),
+) (*Merger[T], error) {
+	merger, err := NewUntypedMerger(opts, unmarshal, marshal)
 	if err != nil {
 		return nil, err
 	}

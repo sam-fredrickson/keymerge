@@ -23,7 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: Renamed `Merger` → `UntypedMerger` (for dynamic configs without known types)
 - **BREAKING**: Renamed `NewMerger()` → `NewUntypedMerger()`
 - **BREAKING**: New generic `Merger[T]` & `NewMerger[T]()` (new primary/recommended API)
-- Package-level `Merge()` and `MergeMarshal()` functions now use `UntypedMerger` (unchanged behavior)
+- **BREAKING**: Renamed `MergeMarshal()` → `Merge()` (for both package-level function and methods)
+- **BREAKING**: Renamed `Merge()` → `MergeUnstructured()` (for already-unmarshaled data)
+- **BREAKING**: `NewMerger[T]()` and `NewUntypedMerger()` now require `unmarshal` and `marshal` functions
+- **BREAKING**: `Merger[T].Merge()` and `UntypedMerger.Merge()` now take `docs ...[]byte` (no unmarshal/marshal params)
 - Refactored typed merger code into separate `typed.go` file
 - Updated all documentation to lead with type-safe `Merger[T]` API
 - Optimize path tracking in list merging: replaced `fmt.Sprintf` with `strconv.Itoa` for ~43% speedup and ~84% reduction in allocations
@@ -36,31 +39,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **For new projects**: Use `Merger[T]` with struct tags:
 ```go
-// Old approach (still works)
+// Old approach (v0.2.0)
 opts := keymerge.Options{PrimaryKeyNames: []string{"name"}}
 result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, docs...)
 
-// New recommended approach
+// New approach (v0.3.0)
 type Config struct {
     Services []Service `yaml:"services"`
 }
 type Service struct {
     Name string `yaml:"name" km:"primary"`
 }
-merger, _ := keymerge.NewMerger[Config](keymerge.Options{})
-result, _ := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, docs...)
+merger, _ := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
+result, _ := merger.Merge(docs...)
 ```
 
 **For existing projects with dynamic configs**:
 ```go
-// Before
+// Before (v0.2.0)
 m, _ := keymerge.NewMerger(opts)
+result, _ := m.MergeMarshal(yaml.Unmarshal, yaml.Marshal, docs...)
 
-// After
-m, _ := keymerge.NewUntypedMerger(opts)
+// After (v0.3.0)
+m, _ := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
+result, _ := m.Merge(docs...)
 ```
 
-Package-level `Merge()` and `MergeMarshal()` functions are unchanged.
+**For package-level functions**:
+```go
+// Before (v0.2.0)
+result, _ := keymerge.MergeMarshal(opts, yaml.Unmarshal, yaml.Marshal, docs...)
+mergedAny, _ := keymerge.Merge(opts, mapDocs...)
+
+// After (v0.3.0)
+result, _ := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, docs...)
+mergedAny, _ := keymerge.MergeUnstructured(opts, mapDocs...)
+```
 
 ## [0.2.0] - 2025-11-08
 

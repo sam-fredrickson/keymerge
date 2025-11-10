@@ -26,7 +26,7 @@ func ExampleMerger() {
 	}
 
 	// Create a typed merger
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{})
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,7 +53,7 @@ tags: [stable, latest]
 `)
 
 	// Merge
-	result, err := merger.MergeMarshal(yaml.Unmarshal, yaml.Marshal, base, overlay)
+	result, err := merger.Merge(base, overlay)
 	if err != nil {
 		log.Fatal(err)
 	}
