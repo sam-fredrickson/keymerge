@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.3.0] - 2025-11-09
+
+### Added
 - **Type-safe `Merger[T]`** - New primary API using generics and struct tags for fine-grained merge control
   - `km:"primary"` tag for marking primary key fields (supports composite keys)
   - `km:"mode=concat|dedup|replace"` for per-field scalar list merge modes
@@ -146,7 +154,8 @@ opts := keymerge.Options{
 - Dependabot configuration
 - Complete documentation in README
 
-[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sam-fredrickson/keymerge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sam-fredrickson/keymerge/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/sam-fredrickson/keymerge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/sam-fredrickson/keymerge/releases/tag/v0.1.0
