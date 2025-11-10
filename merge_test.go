@@ -572,10 +572,10 @@ func verifyIntPorts(t *testing.T, result []byte, expected []int) {
 	}
 }
 
-func TestScalarListModes(t *testing.T) {
+func TestScalarModes(t *testing.T) {
 	tests := []struct {
 		name         string
-		mode         keymerge.ScalarListMode
+		mode         keymerge.ScalarMode
 		base         string
 		overlay      string
 		expectedTags []string
@@ -583,35 +583,35 @@ func TestScalarListModes(t *testing.T) {
 	}{
 		{
 			name:         "Concat",
-			mode:         keymerge.ScalarListConcat,
+			mode:         keymerge.ScalarConcat,
 			base:         `tags: [foo, bar]`,
 			overlay:      `tags: [baz, qux]`,
 			expectedTags: []string{"foo", "bar", "baz", "qux"},
 		},
 		{
 			name:         "Dedup",
-			mode:         keymerge.ScalarListDedup,
+			mode:         keymerge.ScalarDedup,
 			base:         `tags: [foo, bar, baz]`,
 			overlay:      `tags: [bar, qux, foo]`,
 			expectedTags: []string{"foo", "bar", "baz", "qux"},
 		},
 		{
 			name:         "Replace",
-			mode:         keymerge.ScalarListReplace,
+			mode:         keymerge.ScalarReplace,
 			base:         `tags: [foo, bar, baz]`,
 			overlay:      `tags: [qux, quux]`,
 			expectedTags: []string{"qux", "quux"},
 		},
 		{
 			name:         "DedupNumbers",
-			mode:         keymerge.ScalarListDedup,
+			mode:         keymerge.ScalarDedup,
 			base:         `ports: [8080, 8081, 8082]`,
 			overlay:      `ports: [8081, 8083, 8080]`,
 			expectedInts: []int{8080, 8081, 8082, 8083},
 		},
 		{
 			name:         "DefaultIsConcat",
-			mode:         keymerge.ScalarListConcat, // Explicitly set to show it's the default
+			mode:         keymerge.ScalarConcat, // Explicitly set to show it's the default
 			base:         `tags: [a, b]`,
 			overlay:      `tags: [c]`,
 			expectedTags: []string{"a", "b", "c"},
@@ -621,7 +621,7 @@ func TestScalarListModes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			opts := keymerge.Options{
-				ScalarListMode: tt.mode,
+				ScalarMode: tt.mode,
 			}
 			// Add PrimaryKeyNames for non-number tests to match original behavior
 			if tt.expectedTags != nil {
@@ -645,7 +645,7 @@ func TestScalarListModes(t *testing.T) {
 	}
 }
 
-func TestScalarListMode_DedupComplexTypes(t *testing.T) {
+func TestScalarMode_DedupComplexTypes(t *testing.T) {
 	// Test dedup with maps and slices (should not deduplicate, always add)
 	base := map[string]any{
 		"items": []any{
@@ -660,7 +660,7 @@ func TestScalarListMode_DedupComplexTypes(t *testing.T) {
 	}
 
 	result, err := keymerge.MergeUnstructured(keymerge.Options{
-		ScalarListMode: keymerge.ScalarListDedup,
+		ScalarMode: keymerge.ScalarDedup,
 	}, base, overlay)
 	if err != nil {
 		t.Fatal(err)
@@ -721,7 +721,7 @@ users:
 	}
 }
 
-func TestObjectListMode_UniqueErrorsOnDuplicateInBase(t *testing.T) {
+func TestDupeMode_UniqueErrorsOnDuplicateInBase(t *testing.T) {
 	base := []byte(`
 users:
   - id: alice
@@ -739,7 +739,7 @@ users:
 
 	_, err := mergeYAMLWith(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
-		ObjectListMode:  keymerge.ObjectListUnique,
+		DupeMode:        keymerge.DupeUnique,
 	}, base, overlay)
 
 	if err == nil {
@@ -769,7 +769,7 @@ users:
 	}
 }
 
-func TestObjectListMode_UniqueErrorsOnDuplicateInOverlay(t *testing.T) {
+func TestDupeMode_UniqueErrorsOnDuplicateInOverlay(t *testing.T) {
 	base := []byte(`
 users:
   - id: alice
@@ -787,7 +787,7 @@ users:
 
 	_, err := mergeYAMLWith(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
-		ObjectListMode:  keymerge.ObjectListUnique,
+		DupeMode:        keymerge.DupeUnique,
 	}, base, overlay)
 
 	if err == nil {
@@ -813,7 +813,7 @@ users:
 	}
 }
 
-func TestObjectListMode_ConsolidateMergesDuplicatesInBase(t *testing.T) {
+func TestDupeMode_ConsolidateMergesDuplicatesInBase(t *testing.T) {
 	base := []byte(`
 users:
   - id: alice
@@ -833,7 +833,7 @@ users:
 
 	result, err := mergeYAMLWith(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
-		ObjectListMode:  keymerge.ObjectListConsolidate,
+		DupeMode:        keymerge.DupeConsolidate,
 	}, base, overlay)
 	if err != nil {
 		t.Fatal(err)
@@ -876,7 +876,7 @@ users:
 	}
 }
 
-func TestObjectListMode_ConsolidateMergesDuplicatesInOverlay(t *testing.T) {
+func TestDupeMode_ConsolidateMergesDuplicatesInOverlay(t *testing.T) {
 	base := []byte(`
 users:
   - id: alice
@@ -894,7 +894,7 @@ users:
 
 	result, err := mergeYAMLWith(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
-		ObjectListMode:  keymerge.ObjectListConsolidate,
+		DupeMode:        keymerge.DupeConsolidate,
 	}, base, overlay)
 	if err != nil {
 		t.Fatal(err)
@@ -928,7 +928,7 @@ users:
 	}
 }
 
-func TestObjectListMode_UniqueIsDefault(t *testing.T) {
+func TestDupeMode_UniqueIsDefault(t *testing.T) {
 	base := []byte(`
 users:
   - id: alice
@@ -942,7 +942,7 @@ users:
     role: user
 `)
 
-	// Don't specify ObjectListMode, should default to Unique
+	// Don't specify DupeMode, should default to Unique
 	_, err := mergeYAMLWith(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
 	}, base, overlay)
@@ -1026,7 +1026,7 @@ func TestNonComparablePrimaryKey_Slice(t *testing.T) {
 
 	_, err := keymerge.MergeUnstructured(keymerge.Options{
 		PrimaryKeyNames: []string{"id"},
-		ObjectListMode:  keymerge.ObjectListConsolidate,
+		DupeMode:        keymerge.DupeConsolidate,
 	}, base, overlay)
 
 	if err == nil {
@@ -1183,15 +1183,15 @@ func TestNestedArrayErrorPath(t *testing.T) {
 	}
 }
 
-func TestScalarListMode_String(t *testing.T) {
+func TestScalarMode_String(t *testing.T) {
 	tests := []struct {
-		mode keymerge.ScalarListMode
+		mode keymerge.ScalarMode
 		want string
 	}{
-		{keymerge.ScalarListConcat, "ScalarListConcat"},
-		{keymerge.ScalarListDedup, "ScalarListDedup"},
-		{keymerge.ScalarListReplace, "ScalarListReplace"},
-		{keymerge.ScalarListMode(99), "ScalarListMode(99)"}, // Invalid value
+		{keymerge.ScalarConcat, "ScalarConcat"},
+		{keymerge.ScalarDedup, "ScalarDedup"},
+		{keymerge.ScalarReplace, "ScalarReplace"},
+		{keymerge.ScalarMode(99), "ScalarMode(99)"}, // Invalid value
 	}
 
 	for _, tt := range tests {
@@ -1201,14 +1201,14 @@ func TestScalarListMode_String(t *testing.T) {
 	}
 }
 
-func TestObjectListMode_String(t *testing.T) {
+func TestDupeMode_String(t *testing.T) {
 	tests := []struct {
-		mode keymerge.ObjectListMode
+		mode keymerge.DupeMode
 		want string
 	}{
-		{keymerge.ObjectListUnique, "ObjectListUnique"},
-		{keymerge.ObjectListConsolidate, "ObjectListConsolidate"},
-		{keymerge.ObjectListMode(99), "ObjectListMode(99)"}, // Invalid value
+		{keymerge.DupeUnique, "DupeUnique"},
+		{keymerge.DupeConsolidate, "DupeConsolidate"},
+		{keymerge.DupeMode(99), "DupeMode(99)"}, // Invalid value
 	}
 
 	for _, tt := range tests {

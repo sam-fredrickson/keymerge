@@ -693,7 +693,7 @@ result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 ### Scalar Lists
 
-When a list contains only scalars (no maps with primary keys), use `ScalarListMode`:
+When a list contains only scalars (no maps with primary keys), use `ScalarMode`:
 
 #### Concat (Default)
 
@@ -701,7 +701,7 @@ Appends all items from all documents:
 
 ```go
 opts := keymerge.Options{
-    ScalarListMode: keymerge.ScalarListConcat, // or omit (default)
+    ScalarMode: keymerge.ScalarConcat, // or omit (default)
 }
 
 base := map[string]any{"tags": []any{"api", "service"}}
@@ -718,7 +718,7 @@ Appends items and removes duplicates (order preserved, later occurrences removed
 
 ```go
 opts := keymerge.Options{
-    ScalarListMode: keymerge.ScalarListDedup,
+    ScalarMode: keymerge.ScalarDedup,
 }
 
 base := map[string]any{"tags": []any{"api", "service"}}
@@ -736,7 +736,7 @@ Overlay list completely replaces base list:
 
 ```go
 opts := keymerge.Options{
-    ScalarListMode: keymerge.ScalarListReplace,
+    ScalarMode: keymerge.ScalarReplace,
 }
 
 base := map[string]any{"tags": []any{"api", "service"}}
@@ -749,7 +749,7 @@ result, err := keymerge.MergeUnstructured(opts, base, overlay)
 
 ### Object Lists with Duplicate Keys
 
-`ObjectListMode` controls how to handle duplicate primary keys **within a single document**. Duplicate keys **across documents** are always merged together (that's the whole point of keymerge!).
+`DupeMode` controls how to handle duplicate primary keys **within a single document**. Duplicate keys **across documents** are always merged together (that's the whole point of keymerge!).
 
 #### Unique (Default)
 
@@ -758,7 +758,7 @@ Returns an error if duplicate primary keys are found within one document:
 ```go
 opts := keymerge.Options{
     PrimaryKeyNames: []string{"id"},
-    ObjectListMode:  keymerge.ObjectListUnique, // or omit (default)
+    DupeMode:  keymerge.DupeUnique, // or omit (default)
 }
 
 base := map[string]any{
@@ -799,7 +799,7 @@ Merges items with duplicate keys together within a single document:
 ```go
 opts := keymerge.Options{
     PrimaryKeyNames: []string{"id"},
-    ObjectListMode:  keymerge.ObjectListConsolidate,
+    DupeMode:  keymerge.DupeConsolidate,
 }
 
 base := map[string]any{
@@ -829,7 +829,7 @@ keymerge defines three error types with detailed context:
 
 #### DuplicatePrimaryKeyError
 
-Returned when duplicate primary keys are found in `ObjectListUnique` mode:
+Returned when duplicate primary keys are found in `DupeUnique` mode:
 
 ```go
 import (
@@ -963,7 +963,7 @@ Create a `Merger` instance to validate options once and reuse it:
 opts := keymerge.Options{
     PrimaryKeyNames: []string{"name", "id"},
     DeleteMarkerKey: "_delete",
-    ScalarListMode:  keymerge.ScalarListDedup,
+    ScalarMode:  keymerge.ScalarDedup,
 }
 
 merger, err := keymerge.NewUntypedMerger(opts, yaml.Unmarshal, yaml.Marshal)
@@ -1180,11 +1180,11 @@ result2, _ := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, baseYAML, overl
 
 ### Scalar List Dedup Performance
 
-`ScalarListDedup` uses a map for O(n) deduplication. This is fast but requires values to be comparable:
+`ScalarDedup` uses a map for O(n) deduplication. This is fast but requires values to be comparable:
 
 ```go
 // Fast - strings are comparable
-opts := keymerge.Options{ScalarListMode: keymerge.ScalarListDedup}
+opts := keymerge.Options{ScalarMode: keymerge.ScalarDedup}
 base := map[string]any{"tags": []any{"a", "b", "c", "a"}}
 result, _ := keymerge.MergeUnstructured(opts, base)
 
@@ -1195,7 +1195,7 @@ base := map[string]any{"items": []any{
 }}
 ```
 
-For non-comparable values, use `ScalarListConcat` instead.
+For non-comparable values, use `ScalarConcat` instead.
 
 ### Memory Allocation
 
@@ -1348,14 +1348,14 @@ result, _ := keymerge.MergeUnstructured(opts, doc3, doc2, doc1)
 // result.value = 1
 ```
 
-### 7. Misunderstanding ObjectListMode
+### 7. Misunderstanding DupeMode
 
-`ObjectListMode` controls duplicates **within a single document**, not across documents:
+`DupeMode` controls duplicates **within a single document**, not across documents:
 
 ```go
 opts := keymerge.Options{
     PrimaryKeyNames: []string{"id"},
-    ObjectListMode:  keymerge.ObjectListUnique, // default
+    DupeMode:  keymerge.DupeUnique, // default
 }
 
 // Same ID across documents is EXPECTED and always merged
@@ -1376,8 +1376,8 @@ overlay := map[string]any{
 result, err := keymerge.MergeUnstructured(opts, base, overlay)
 // err is DuplicatePrimaryKeyError
 
-// Use ObjectListConsolidate to allow internal duplicates
-opts.ObjectListMode = keymerge.ObjectListConsolidate
+// Use DupeConsolidate to allow internal duplicates
+opts.DupeMode = keymerge.DupeConsolidate
 result, _ = keymerge.MergeUnstructured(opts, base, overlay)
 // result.items: [{id: 1, a: 1, b: 2}] - Internal duplicates consolidated
 ```

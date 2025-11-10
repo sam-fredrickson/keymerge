@@ -40,7 +40,7 @@ func FuzzMergeComplexStructures(f *testing.F) {
 
 		opts := keymerge.Options{
 			PrimaryKeyNames: []string{"name", "id"},
-			ScalarListMode:  keymerge.ScalarListConcat,
+			ScalarMode:      keymerge.ScalarConcat,
 		}
 
 		// Should not panic
@@ -93,7 +93,7 @@ func FuzzMergeDirect(f *testing.F) {
 
 		opts := keymerge.Options{
 			PrimaryKeyNames: []string{"id"},
-			ScalarListMode:  keymerge.ScalarListDedup,
+			ScalarMode:      keymerge.ScalarDedup,
 		}
 
 		// Should not panic
@@ -181,15 +181,15 @@ func FuzzMergeScalarModes(f *testing.F) {
 			"tags": []any{b, c},
 		}
 
-		modes := []keymerge.ScalarListMode{
-			keymerge.ScalarListConcat,
-			keymerge.ScalarListDedup,
-			keymerge.ScalarListReplace,
+		modes := []keymerge.ScalarMode{
+			keymerge.ScalarConcat,
+			keymerge.ScalarDedup,
+			keymerge.ScalarReplace,
 		}
 
 		for _, mode := range modes {
 			opts := keymerge.Options{
-				ScalarListMode: mode,
+				ScalarMode: mode,
 			}
 
 			result, err := keymerge.MergeUnstructured(opts, base, overlay)
@@ -202,15 +202,15 @@ func FuzzMergeScalarModes(f *testing.F) {
 
 			// Verify expected behavior
 			switch mode {
-			case keymerge.ScalarListConcat:
+			case keymerge.ScalarConcat:
 				if len(tags) != 4 {
 					t.Fatalf("concat mode: expected 4 items, got %d", len(tags))
 				}
-			case keymerge.ScalarListReplace:
+			case keymerge.ScalarReplace:
 				if len(tags) != 2 {
 					t.Fatalf("replace mode: expected 2 items, got %d", len(tags))
 				}
-			case keymerge.ScalarListDedup:
+			case keymerge.ScalarDedup:
 				// Dedup length depends on uniqueness (could be 1 if all values same)
 				if len(tags) < 1 || len(tags) > 4 {
 					t.Fatalf("dedup mode: expected 1-4 items, got %d", len(tags))

@@ -288,22 +288,22 @@ func parseKMTag(tag string, meta *fieldMetadata) error {
 		// Handle mode=value directives
 		if strings.HasPrefix(part, "mode=") {
 			modeStr := strings.TrimPrefix(part, "mode=")
-			mode, err := parseScalarListMode(modeStr, meta.fieldName)
+			mode, err := parseScalarMode(modeStr, meta.fieldName)
 			if err != nil {
 				return err
 			}
-			meta.scalarListMode = &mode
+			meta.scalarMode = &mode
 			continue
 		}
 
 		// Handle dupe=value directives
 		if strings.HasPrefix(part, "dupe=") {
 			dupeStr := strings.TrimPrefix(part, "dupe=")
-			mode, err := parseObjectListMode(dupeStr, meta.fieldName)
+			mode, err := parseDupeMode(dupeStr, meta.fieldName)
 			if err != nil {
 				return err
 			}
-			meta.objectListMode = &mode
+			meta.dupeMode = &mode
 			continue
 		}
 
@@ -324,15 +324,15 @@ func parseKMTag(tag string, meta *fieldMetadata) error {
 	return nil
 }
 
-// parseScalarListMode converts a string to ScalarListMode.
-func parseScalarListMode(s string, fieldName string) (ScalarListMode, error) {
+// parseScalarMode converts a string to ScalarMode.
+func parseScalarMode(s string, fieldName string) (ScalarMode, error) {
 	switch s {
 	case "concat":
-		return ScalarListConcat, nil
+		return ScalarConcat, nil
 	case "dedup":
-		return ScalarListDedup, nil
+		return ScalarDedup, nil
 	case "replace":
-		return ScalarListReplace, nil
+		return ScalarReplace, nil
 	default:
 		return 0, &InvalidTagError{
 			Kind:      ModeTag,
@@ -343,13 +343,13 @@ func parseScalarListMode(s string, fieldName string) (ScalarListMode, error) {
 	}
 }
 
-// parseObjectListMode converts a string to ObjectListMode.
-func parseObjectListMode(s string, fieldName string) (ObjectListMode, error) {
+// parseDupeMode converts a string to DupeMode.
+func parseDupeMode(s string, fieldName string) (DupeMode, error) {
 	switch s {
 	case "unique":
-		return ObjectListUnique, nil
+		return DupeUnique, nil
 	case "consolidate":
-		return ObjectListConsolidate, nil
+		return DupeConsolidate, nil
 	default:
 		return 0, &InvalidTagError{
 			Kind:      DupeTag,

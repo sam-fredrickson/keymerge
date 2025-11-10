@@ -29,54 +29,54 @@ var (
 	ErrInvalidTag = errors.New("invalid tag")
 )
 
-// ScalarListMode specifies how to merge lists that don't have primary keys.
-type ScalarListMode int
+// ScalarMode specifies how to merge lists that don't have primary keys.
+type ScalarMode int
 
 const (
-	// ScalarListConcat appends overlay list items to base list items (default behavior).
-	ScalarListConcat ScalarListMode = iota
-	// ScalarListDedup concatenates lists and removes duplicate values.
-	ScalarListDedup
-	// ScalarListReplace replaces the base list entirely with the overlay list.
-	ScalarListReplace
+	// ScalarConcat appends overlay list items to base list items (default behavior).
+	ScalarConcat ScalarMode = iota
+	// ScalarDedup concatenates lists and removes duplicate values.
+	ScalarDedup
+	// ScalarReplace replaces the base list entirely with the overlay list.
+	ScalarReplace
 )
 
-func (m ScalarListMode) String() string {
+func (m ScalarMode) String() string {
 	switch m {
-	case ScalarListConcat:
-		return "ScalarListConcat"
-	case ScalarListDedup:
-		return "ScalarListDedup"
-	case ScalarListReplace:
-		return "ScalarListReplace"
+	case ScalarConcat:
+		return "ScalarConcat"
+	case ScalarDedup:
+		return "ScalarDedup"
+	case ScalarReplace:
+		return "ScalarReplace"
 	default:
-		return fmt.Sprintf("ScalarListMode(%d)", m)
+		return fmt.Sprintf("ScalarMode(%d)", m)
 	}
 }
 
-// ObjectListMode specifies how to handle duplicate primary keys in object lists.
-type ObjectListMode int
+// DupeMode specifies how to handle duplicate primary keys in object lists.
+type DupeMode int
 
 const (
-	// ObjectListUnique returns an error if duplicate primary keys are found (default behavior).
-	ObjectListUnique ObjectListMode = iota
-	// ObjectListConsolidate merges items with duplicate primary keys together.
-	ObjectListConsolidate
+	// DupeUnique returns an error if duplicate primary keys are found (default behavior).
+	DupeUnique DupeMode = iota
+	// DupeConsolidate merges items with duplicate primary keys together.
+	DupeConsolidate
 )
 
-func (m ObjectListMode) String() string {
+func (m DupeMode) String() string {
 	switch m {
-	case ObjectListUnique:
-		return "ObjectListUnique"
-	case ObjectListConsolidate:
-		return "ObjectListConsolidate"
+	case DupeUnique:
+		return "DupeUnique"
+	case DupeConsolidate:
+		return "DupeConsolidate"
 	default:
-		return fmt.Sprintf("ObjectListMode(%d)", m)
+		return fmt.Sprintf("DupeMode(%d)", m)
 	}
 }
 
 // DuplicatePrimaryKeyError is returned when duplicate primary keys are found
-// in a list and [ObjectListMode] is set to [ObjectListUnique].
+// in a list and [DupeMode] is set to [DupeUnique].
 type DuplicatePrimaryKeyError struct {
 	// Key is the duplicate primary key value
 	Key any
@@ -151,16 +151,16 @@ func (e *MarshalError) Is(target error) bool {
 //
 // The zero value is valid and provides sensible defaults:
 //   - No primary key matching (all lists treated as scalar lists)
-//   - [ScalarListConcat] mode (lists are concatenated)
+//   - [ScalarConcat] mode (lists are concatenated)
 //   - No deletion markers
-//   - [ObjectListUnique] mode (errors on duplicates, though none detected without primary keys)
+//   - [DupeUnique] mode (errors on duplicates, though none detected without primary keys)
 type Options struct {
 	// PrimaryKeyNames specifies field names to use as primary keys when merging lists.
 	// The first matching field name identifies corresponding items across documents.
 	// Items with matching keys are deep-merged; items without matches are appended.
 	//
 	// Example: ["name", "id"] tries "name" first, then "id". Items without either field
-	// are treated as having no key and merged according to [ScalarListMode].
+	// are treated as having no key and merged according to [ScalarMode].
 	PrimaryKeyNames []string
 
 	// DeleteMarkerKey specifies a field name that marks items for deletion.
@@ -168,13 +168,13 @@ type Options struct {
 	// If empty, deletion semantics are disabled.
 	DeleteMarkerKey string
 
-	// ScalarListMode specifies how to merge lists without primary keys.
-	// Default is [ScalarListConcat].
-	ScalarListMode ScalarListMode
+	// ScalarMode specifies how to merge lists without primary keys.
+	// Default is [ScalarConcat].
+	ScalarMode ScalarMode
 
-	// ObjectListMode specifies how to handle duplicate primary keys in object lists.
-	// Default is [ObjectListUnique].
-	ObjectListMode ObjectListMode
+	// DupeMode specifies how to handle duplicate primary keys in object lists.
+	// Default is [DupeUnique].
+	DupeMode DupeMode
 }
 
 // fieldMetadata contains merge directives for a specific field extracted from struct tags.
@@ -183,10 +183,10 @@ type fieldMetadata struct {
 	fieldName string
 	// primaryKeys lists field names that serve as composite primary keys for this object type
 	primaryKeys []string
-	// scalarListMode overrides the default scalar list merge mode
-	scalarListMode *ScalarListMode
-	// objectListMode overrides the default object list mode
-	objectListMode *ObjectListMode
+	// scalarMode overrides the default scalar list merge mode
+	scalarMode *ScalarMode
+	// dupeMode overrides the default object list mode
+	dupeMode *DupeMode
 	// children contains metadata for nested struct fields (map key is the serialized field name)
 	children map[string]*fieldMetadata
 }
@@ -259,10 +259,10 @@ func Merge(
 // MergeUnstructured merges multiple documents left-to-right, with later documents taking precedence.
 //
 // Maps are deep-merged recursively. Lists are merged by primary key if items contain
-// a primary key field; otherwise merged according to [ScalarListMode]. Scalar values
+// a primary key field; otherwise merged according to [ScalarMode]. Scalar values
 // are replaced by later values.
 //
-// Duplicate items in lists are handled according to [ObjectListMode].
+// Duplicate items in lists are handled according to [DupeMode].
 //
 // Input documents should be map[string]any, []any, or scalar values.
 //
@@ -475,19 +475,19 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 	}
 
 	if !hasKeys {
-		// No primary key found in any overlay item, merge according to ScalarListMode
-		scalarMode := m.opts.ScalarListMode
+		// No primary key found in any overlay item, merge according to ScalarMode
+		scalarMode := m.opts.ScalarMode
 		// Check metadata for override
-		if meta := m.getCurrentMetadata(); meta != nil && meta.scalarListMode != nil {
-			scalarMode = *meta.scalarListMode
+		if meta := m.getCurrentMetadata(); meta != nil && meta.scalarMode != nil {
+			scalarMode = *meta.scalarMode
 		}
 
 		switch scalarMode {
-		case ScalarListReplace:
+		case ScalarReplace:
 			return overlay, nil
-		case ScalarListDedup:
+		case ScalarDedup:
 			return deduplicateList(base, overlay), nil
-		default: // ScalarListConcat
+		default: // ScalarConcat
 			result := make([]any, len(base)+len(overlay))
 			copy(result, base)
 			copy(result[len(base):], overlay)
@@ -496,9 +496,9 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 	}
 
 	// Get the object list mode for this context
-	objectMode := m.opts.ObjectListMode
-	if meta := m.getCurrentMetadata(); meta != nil && meta.objectListMode != nil {
-		objectMode = *meta.objectListMode
+	objectMode := m.opts.DupeMode
+	if meta := m.getCurrentMetadata(); meta != nil && meta.dupeMode != nil {
+		objectMode = *meta.dupeMode
 	}
 
 	// Build index of items by composite primary key
@@ -539,7 +539,7 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 		}
 
 		// Duplicate found!
-		if objectMode == ObjectListUnique {
+		if objectMode == DupeUnique {
 			err := &DuplicatePrimaryKeyError{
 				Key:       keyString(key),
 				Positions: []int{existingIdx, i},
@@ -550,7 +550,7 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 			return nil, err
 		}
 
-		// ObjectListConsolidate: merge into first occurrence
+		// DupeConsolidate: merge into first occurrence
 		m.pop()                           // Pop current index before merging
 		m.push(strconv.Itoa(existingIdx)) // Push existing index for merge
 		merged, err := m.mergeValues(result[existingIdx], item)
@@ -561,8 +561,8 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 		result[existingIdx] = merged
 	}
 
-	// Check for duplicates in overlay (if ObjectListUnique mode)
-	if objectMode == ObjectListUnique {
+	// Check for duplicates in overlay (if DupeUnique mode)
+	if objectMode == DupeUnique {
 		overlayKeys := make(map[any]int, len(overlay))
 		for i, overlayItem := range overlay {
 			m.push(strconv.Itoa(i))
@@ -634,7 +634,7 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 		}
 
 		// Check if key is comparable (for Consolidate mode, Unique already checked)
-		if objectMode != ObjectListUnique && !isKeyComparable(key) {
+		if objectMode != DupeUnique && !isKeyComparable(key) {
 			err := &NonComparablePrimaryKeyError{
 				Key:      keyString(key),
 				Position: i,
@@ -665,7 +665,7 @@ func (m *UntypedMerger) mergeSlices(base, overlay []any) ([]any, error) {
 	}
 
 	// Filter out nil items (deleted items or consolidated duplicates)
-	if m.opts.DeleteMarkerKey != "" || objectMode == ObjectListConsolidate {
+	if m.opts.DeleteMarkerKey != "" || objectMode == DupeConsolidate {
 		filtered := make([]any, 0, len(result))
 		for _, item := range result {
 			if item != nil {

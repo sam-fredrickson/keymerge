@@ -82,7 +82,7 @@ endpoints:
 }
 
 // Test Merger with field-specific scalar list modes.
-func TestMerger_ScalarListModes(t *testing.T) {
+func TestMerger_ScalarModes(t *testing.T) {
 	type Config struct {
 		Concat  []string `yaml:"concat" km:"mode=concat"`
 		Dedup   []string `yaml:"dedup" km:"mode=dedup"`
@@ -136,7 +136,7 @@ replace: [x, y]
 }
 
 // Test Merger with field-specific object list modes.
-func TestMerger_ObjectListModes(t *testing.T) {
+func TestMerger_DupeModes(t *testing.T) {
 	type Item struct {
 		ID    string `yaml:"id" km:"primary"`
 		Value int    `yaml:"value"`
@@ -444,7 +444,7 @@ items: [y]
 }
 
 // Test Merger error on invalid scalar list mode.
-func TestMerger_InvalidScalarListMode(t *testing.T) {
+func TestMerger_InvalidScalarMode(t *testing.T) {
 	type Config struct {
 		Items []string `yaml:"items" km:"mode=invalid"`
 	}
@@ -472,7 +472,7 @@ func TestMerger_InvalidScalarListMode(t *testing.T) {
 }
 
 // Test Merger error on invalid object list mode.
-func TestMerger_InvalidObjectListMode(t *testing.T) {
+func TestMerger_InvalidDupeMode(t *testing.T) {
 	type Item struct {
 		ID string `yaml:"id" km:"primary"`
 	}
@@ -1088,7 +1088,7 @@ func TestInvalidTagError_InvalidModeValues(t *testing.T) {
 			wantValue: "CONCAT",
 		},
 		{
-			name: "ObjectListMode_Typo",
+			name: "DupeMode_Typo",
 			createMerger: func() error {
 				type Item struct {
 					ID string `yaml:"id" km:"primary"`
@@ -1104,7 +1104,7 @@ func TestInvalidTagError_InvalidModeValues(t *testing.T) {
 			wantMsg:   "invalid dupe tag",
 		},
 		{
-			name: "ObjectListMode_Uppercase",
+			name: "DupeMode_Uppercase",
 			createMerger: func() error {
 				type Item struct {
 					ID string `yaml:"id" km:"primary"`

@@ -240,9 +240,9 @@ func BenchmarkMerge_ScalarOverridesOnly(b *testing.B) {
 	}
 }
 
-func BenchmarkMerge_ScalarListDedup_Small(b *testing.B) {
+func BenchmarkMerge_ScalarDedup_Small(b *testing.B) {
 	opts := keymerge.Options{
-		ScalarListMode: keymerge.ScalarListDedup,
+		ScalarMode: keymerge.ScalarDedup,
 	}
 
 	base := map[string]any{
@@ -258,9 +258,9 @@ func BenchmarkMerge_ScalarListDedup_Small(b *testing.B) {
 	}
 }
 
-func BenchmarkMerge_ScalarListDedup_Medium(b *testing.B) {
+func BenchmarkMerge_ScalarDedup_Medium(b *testing.B) {
 	opts := keymerge.Options{
-		ScalarListMode: keymerge.ScalarListDedup,
+		ScalarMode: keymerge.ScalarDedup,
 	}
 
 	// 50 items in base, 50 in overlay with 25 duplicates
@@ -284,9 +284,9 @@ func BenchmarkMerge_ScalarListDedup_Medium(b *testing.B) {
 	}
 }
 
-func BenchmarkMerge_ScalarListDedup_Large(b *testing.B) {
+func BenchmarkMerge_ScalarDedup_Large(b *testing.B) {
 	opts := keymerge.Options{
-		ScalarListMode: keymerge.ScalarListDedup,
+		ScalarMode: keymerge.ScalarDedup,
 	}
 
 	// 200 items in base, 200 in overlay with 100 duplicates

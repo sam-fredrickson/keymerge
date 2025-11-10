@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: Renamed `Merge()` → `MergeUnstructured()` (for already-unmarshaled data)
 - **BREAKING**: `NewMerger[T]()` and `NewUntypedMerger()` now require `unmarshal` and `marshal` functions
 - **BREAKING**: `Merger[T].Merge()` and `UntypedMerger.Merge()` now take `docs ...[]byte` (no unmarshal/marshal params)
+- **BREAKING**: Renamed `ScalarListMode` → `ScalarMode` (enum type and `Options.ScalarListMode` field)
+- **BREAKING**: Renamed scalar list mode constants: `ScalarListConcat` → `ScalarConcat`, `ScalarListDedup` → `ScalarDedup`, `ScalarListReplace` → `ScalarReplace`
+- **BREAKING**: Renamed `ObjectListMode` → `DupeMode` (enum type and `Options.ObjectListMode` field)
+- **BREAKING**: Renamed object list mode constants: `ObjectListUnique` → `DupeUnique`, `ObjectListConsolidate` → `DupeConsolidate`
 - Refactored typed merger code into separate `typed.go` file
 - Updated all documentation to lead with type-safe `Merger[T]` API
 - Optimize path tracking in list merging: replaced `fmt.Sprintf` with `strconv.Itoa` for ~43% speedup and ~84% reduction in allocations
@@ -74,6 +78,23 @@ mergedAny, _ := keymerge.Merge(opts, mapDocs...)
 // After (v0.3.0)
 result, _ := keymerge.Merge(opts, yaml.Unmarshal, yaml.Marshal, docs...)
 mergedAny, _ := keymerge.MergeUnstructured(opts, mapDocs...)
+```
+
+**For Options struct fields**:
+```go
+// Before (v0.2.0)
+opts := keymerge.Options{
+    PrimaryKeyNames: []string{"id"},
+    ScalarListMode:  keymerge.ScalarListDedup,
+    ObjectListMode:  keymerge.ObjectListConsolidate,
+}
+
+// After (v0.3.0)
+opts := keymerge.Options{
+    PrimaryKeyNames: []string{"id"},
+    ScalarMode:      keymerge.ScalarDedup,
+    DupeMode:        keymerge.DupeConsolidate,
+}
 ```
 
 ## [0.2.0] - 2025-11-08
