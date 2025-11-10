@@ -260,43 +260,43 @@ users:
 	}
 }
 
-func TestNilOverlay(t *testing.T) {
-	base := []byte(`foo: bar`)
-	overlay := []byte(`foo: null`)
-
-	result, err := mergeYAML(base, overlay)
-	if err != nil {
-		t.Fatal(err)
+func TestNilHandling(t *testing.T) {
+	tests := []struct {
+		name     string
+		base     []byte
+		overlay  []byte
+		expected string
+	}{
+		{
+			name:     "NilOverlay",
+			base:     []byte(`foo: bar`),
+			overlay:  []byte(`foo: null`),
+			expected: "bar", // Nil overlay should keep base
+		},
+		{
+			name:     "NilBase",
+			base:     []byte(`foo: null`),
+			overlay:  []byte(`foo: bar`),
+			expected: "bar", // Overlay should replace nil base
+		},
 	}
 
-	var parsed map[string]any
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := mergeYAML(tt.base, tt.overlay)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	// Nil overlay should keep base
-	if parsed["foo"] != "bar" {
-		t.Fatalf("expected 'bar', got %v", parsed["foo"])
-	}
-}
+			var parsed map[string]any
+			if err := yaml.Unmarshal(result, &parsed); err != nil {
+				t.Fatal(err)
+			}
 
-func TestNilBase(t *testing.T) {
-	base := []byte(`foo: null`)
-	overlay := []byte(`foo: bar`)
-
-	result, err := mergeYAML(base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var parsed map[string]any
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
-
-	// Overlay should replace nil base
-	if parsed["foo"] != "bar" {
-		t.Fatalf("expected 'bar', got %v", parsed["foo"])
+			if parsed["foo"] != tt.expected {
+				t.Fatalf("expected %q, got %v", tt.expected, parsed["foo"])
+			}
+		})
 	}
 }
 
@@ -492,44 +492,57 @@ users:
 	}
 }
 
-func TestDeleteMarkerFalse(t *testing.T) {
+func TestDeleteMarkerNonTrueValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		marker string // YAML representation of the marker value
+	}{
+		{"false", "_delete: false"},
+		{"non-bool string", `_delete: "not a bool"`},
+	}
+
 	base := []byte(`
 users:
   - name: alice
     role: admin
 `)
-	overlay := []byte(`
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			overlay := []byte(`
 users:
   - name: alice
-    _delete: false
+    ` + tt.marker + `
     role: user
 `)
 
-	result, err := mergeYAMLWith(keymerge.Options{
-		DeleteMarkerKey: "_delete",
-		PrimaryKeyNames: []string{"name"},
-	}, base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
+			result, err := mergeYAMLWith(keymerge.Options{
+				DeleteMarkerKey: "_delete",
+				PrimaryKeyNames: []string{"name"},
+			}, base, overlay)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	var parsed struct {
-		Users []struct {
-			Name string `yaml:"name"`
-			Role string `yaml:"role"`
-		} `yaml:"users"`
-	}
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
+			var parsed struct {
+				Users []struct {
+					Name string `yaml:"name"`
+					Role string `yaml:"role"`
+				} `yaml:"users"`
+			}
+			if err := yaml.Unmarshal(result, &parsed); err != nil {
+				t.Fatal(err)
+			}
 
-	// Alice should be updated, not deleted
-	if len(parsed.Users) != 1 {
-		t.Fatalf("expected 1 user, got %d", len(parsed.Users))
-	}
+			// Alice should be updated, not deleted (marker is not bool true)
+			if len(parsed.Users) != 1 {
+				t.Fatalf("expected 1 user, got %d", len(parsed.Users))
+			}
 
-	if parsed.Users[0].Role != "user" {
-		t.Fatalf("expected role=user, got %s", parsed.Users[0].Role)
+			if parsed.Users[0].Role != "user" {
+				t.Fatalf("expected role=user, got %s", parsed.Users[0].Role)
+			}
+		})
 	}
 }
 
@@ -629,70 +642,6 @@ func TestScalarListModes(t *testing.T) {
 				verifyIntPorts(t, result, tt.expectedInts)
 			}
 		})
-	}
-}
-
-func TestScalarListMode_DefaultIsConcat(t *testing.T) {
-	base := []byte(`tags: [a, b]`)
-	overlay := []byte(`tags: [c]`)
-
-	// Don't specify ScalarListMode at all, should default to concat
-	result, err := mergeYAMLWith(keymerge.Options{}, base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var parsed struct {
-		Tags []string `yaml:"tags"`
-	}
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
-
-	expected := []string{"a", "b", "c"}
-	if !reflect.DeepEqual(parsed.Tags, expected) {
-		t.Fatalf("expected %v, got %v", expected, parsed.Tags)
-	}
-}
-
-func TestDeleteMarkerNonBoolValue(t *testing.T) {
-	base := []byte(`
-users:
-  - name: alice
-    role: admin
-`)
-	overlay := []byte(`
-users:
-  - name: alice
-    _delete: "not a bool"
-    role: user
-`)
-
-	result, err := mergeYAMLWith(keymerge.Options{
-		DeleteMarkerKey: "_delete",
-		PrimaryKeyNames: []string{"name"},
-	}, base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var parsed struct {
-		Users []struct {
-			Name string `yaml:"name"`
-			Role string `yaml:"role"`
-		} `yaml:"users"`
-	}
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
-
-	// Alice should be updated, not deleted (marker is not bool true)
-	if len(parsed.Users) != 1 {
-		t.Fatalf("expected 1 user, got %d", len(parsed.Users))
-	}
-
-	if parsed.Users[0].Role != "user" {
-		t.Fatalf("expected role=user, got %s", parsed.Users[0].Role)
 	}
 }
 

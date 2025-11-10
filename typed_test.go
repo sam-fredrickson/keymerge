@@ -1053,112 +1053,95 @@ func TestInvalidTagError_UnknownDirective(t *testing.T) {
 }
 
 // Test InvalidTagError for invalid scalar list mode values.
-func TestInvalidTagError_InvalidScalarMode_Typo(t *testing.T) {
-	type Config struct {
-		Items []string `yaml:"items" km:"mode=concat_typo"`
+// Test InvalidTagError for invalid scalar/object list mode values.
+func TestInvalidTagError_InvalidModeValues(t *testing.T) {
+	tests := []struct {
+		name         string
+		createMerger func() error
+		wantKind     keymerge.TagKind
+		wantValue    string
+		wantMsg      string
+	}{
+		{
+			name: "ScalarMode_Typo",
+			createMerger: func() error {
+				type Config struct {
+					Items []string `yaml:"items" km:"mode=concat_typo"`
+				}
+				_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
+				return err
+			},
+			wantKind:  keymerge.ModeTag,
+			wantValue: "concat_typo",
+			wantMsg:   "invalid mode tag",
+		},
+		{
+			name: "ScalarMode_Uppercase",
+			createMerger: func() error {
+				type Config struct {
+					Items []string `yaml:"items" km:"mode=CONCAT"`
+				}
+				_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
+				return err
+			},
+			wantKind:  keymerge.ModeTag,
+			wantValue: "CONCAT",
+		},
+		{
+			name: "ObjectListMode_Typo",
+			createMerger: func() error {
+				type Item struct {
+					ID string `yaml:"id" km:"primary"`
+				}
+				type Config struct {
+					Items []Item `yaml:"items" km:"dupe=uniqu"`
+				}
+				_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
+				return err
+			},
+			wantKind:  keymerge.DupeTag,
+			wantValue: "uniqu",
+			wantMsg:   "invalid dupe tag",
+		},
+		{
+			name: "ObjectListMode_Uppercase",
+			createMerger: func() error {
+				type Item struct {
+					ID string `yaml:"id" km:"primary"`
+				}
+				type Config struct {
+					Items []Item `yaml:"items" km:"dupe=CONSOLIDATE"`
+				}
+				_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
+				return err
+			},
+			wantKind:  keymerge.DupeTag,
+			wantValue: "CONSOLIDATE",
+		},
 	}
 
-	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-	if err == nil {
-		t.Fatal("expected error for invalid mode")
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.createMerger()
+			if err == nil {
+				t.Fatal("expected error for invalid tag")
+			}
 
-	var tagErr *keymerge.InvalidTagError
-	if !errors.As(err, &tagErr) {
-		t.Fatalf("expected InvalidTagError, got %T", err)
-	}
+			var tagErr *keymerge.InvalidTagError
+			if !errors.As(err, &tagErr) {
+				t.Fatalf("expected InvalidTagError, got %T", err)
+			}
 
-	if tagErr.Kind != keymerge.ModeTag {
-		t.Errorf("expected ModeTag kind, got %v", tagErr.Kind)
-	}
-	if tagErr.Value != "concat_typo" {
-		t.Errorf("expected value 'concat_typo', got %q", tagErr.Value)
-	}
-	if !strings.Contains(tagErr.Error(), "invalid mode tag") {
-		t.Errorf("error message should mention 'invalid mode tag': %s", tagErr.Error())
-	}
-}
-
-// Test InvalidTagError for invalid scalar list mode with uppercase.
-func TestInvalidTagError_InvalidScalarMode_Uppercase(t *testing.T) {
-	type Config struct {
-		Items []string `yaml:"items" km:"mode=CONCAT"`
-	}
-
-	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-	if err == nil {
-		t.Fatal("expected error for uppercase mode")
-	}
-
-	var tagErr *keymerge.InvalidTagError
-	if !errors.As(err, &tagErr) {
-		t.Fatalf("expected InvalidTagError, got %T", err)
-	}
-
-	if tagErr.Kind != keymerge.ModeTag {
-		t.Errorf("expected ModeTag kind, got %v", tagErr.Kind)
-	}
-	if tagErr.Value != "CONCAT" {
-		t.Errorf("expected value 'CONCAT', got %q", tagErr.Value)
-	}
-}
-
-// Test InvalidTagError for invalid object list mode with typo.
-func TestInvalidTagError_InvalidObjectListMode_Typo(t *testing.T) {
-	type Item struct {
-		ID string `yaml:"id" km:"primary"`
-	}
-
-	type Config struct {
-		Items []Item `yaml:"items" km:"dupe=uniqu"`
-	}
-
-	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-	if err == nil {
-		t.Fatal("expected error for invalid dupe mode")
-	}
-
-	var tagErr *keymerge.InvalidTagError
-	if !errors.As(err, &tagErr) {
-		t.Fatalf("expected InvalidTagError, got %T", err)
-	}
-
-	if tagErr.Kind != keymerge.DupeTag {
-		t.Errorf("expected DupeTag kind, got %v", tagErr.Kind)
-	}
-	if tagErr.Value != "uniqu" {
-		t.Errorf("expected value 'uniqu', got %q", tagErr.Value)
-	}
-	if !strings.Contains(tagErr.Error(), "invalid dupe tag") {
-		t.Errorf("error message should mention 'invalid dupe tag': %s", tagErr.Error())
-	}
-}
-
-// Test InvalidTagError for invalid object list mode with uppercase.
-func TestInvalidTagError_InvalidObjectListMode_Uppercase(t *testing.T) {
-	type Item struct {
-		ID string `yaml:"id" km:"primary"`
-	}
-
-	type Config struct {
-		Items []Item `yaml:"items" km:"dupe=CONSOLIDATE"`
-	}
-
-	_, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-	if err == nil {
-		t.Fatal("expected error for uppercase dupe mode")
-	}
-
-	var tagErr *keymerge.InvalidTagError
-	if !errors.As(err, &tagErr) {
-		t.Fatalf("expected InvalidTagError, got %T", err)
-	}
-
-	if tagErr.Kind != keymerge.DupeTag {
-		t.Errorf("expected DupeTag kind, got %v", tagErr.Kind)
-	}
-	if tagErr.Value != "CONSOLIDATE" {
-		t.Errorf("expected value 'CONSOLIDATE', got %q", tagErr.Value)
+			if tagErr.Kind != tt.wantKind {
+				t.Errorf("expected %v kind, got %v", tt.wantKind, tagErr.Kind)
+			}
+			if tagErr.Value != tt.wantValue {
+				t.Errorf("expected value %q, got %q", tt.wantValue, tagErr.Value)
+			}
+			if tt.wantMsg != "" && !strings.Contains(tagErr.Error(), tt.wantMsg) {
+				t.Errorf("error message should mention %q: %s", tt.wantMsg, tagErr.Error())
+			}
+		})
 	}
 }
 
@@ -1479,95 +1462,6 @@ items:
 				t.Errorf("expected URL %q, got %q", tc.wantURL, config.Items[0].URL)
 			}
 		})
-	}
-}
-
-// Test field name with yaml omitempty modifier.
-func TestMerger_FieldName_YamlOmitempty(t *testing.T) {
-	type Config struct {
-		FieldName string `yaml:"field_name,omitempty"`
-	}
-
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	base := []byte(`field_name: base_value`)
-	overlay := []byte(`field_name: overlay_value`)
-
-	result, err := merger.Merge(base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var config Config
-	if err := yaml.Unmarshal(result, &config); err != nil {
-		t.Fatal(err)
-	}
-
-	if config.FieldName != "overlay_value" {
-		t.Errorf("expected 'overlay_value', got %q", config.FieldName)
-	}
-}
-
-// Test km:field override has priority over yaml tag.
-func TestMerger_FieldName_KmFieldOverride(t *testing.T) {
-	type Config struct {
-		Field string `yaml:"yaml_name" km:"field=custom_name"`
-	}
-
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	base := []byte(`custom_name: base`)
-	overlay := []byte(`custom_name: overlay`)
-
-	result, err := merger.Merge(base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var parsed map[string]any
-	if err := yaml.Unmarshal(result, &parsed); err != nil {
-		t.Fatal(err)
-	}
-
-	if val, ok := parsed["custom_name"].(string); !ok || val != "overlay" {
-		t.Errorf("expected custom_name=overlay, got %v", parsed["custom_name"])
-	}
-}
-
-// Test struct field name fallback when no serialization tags present.
-// This tests that the merger correctly detects the struct field name as the fallback.
-func TestMerger_FieldName_StructFieldFallback(t *testing.T) {
-	type Config struct {
-		MyField string `yaml:"MyField"`
-	}
-
-	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// When the struct field name matches the yaml field name, it uses struct field as fallback
-	base := []byte(`MyField: base`)
-	overlay := []byte(`MyField: overlay`)
-
-	result, err := merger.Merge(base, overlay)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var config Config
-	if err := yaml.Unmarshal(result, &config); err != nil {
-		t.Fatal(err)
-	}
-
-	if config.MyField != "overlay" {
-		t.Errorf("expected 'overlay', got %q", config.MyField)
 	}
 }
 
