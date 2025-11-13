@@ -16,6 +16,7 @@
           buildInputs = with pkgs; [
             go_1_25
             golangci-lint
+            goreleaser
             just
             # Additional tools for profiling
             graphviz  # for pprof visualizations

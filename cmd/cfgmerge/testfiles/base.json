@@ -1,0 +1,16 @@
+{
+  "services": [
+    {
+      "name": "api",
+      "port": 8080,
+      "replicas": 1
+    }
+  ],
+  "tags": [
+    "prod"
+  ],
+  "database": {
+    "host": "localhost",
+    "port": 5432
+  }
+}

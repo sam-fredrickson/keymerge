@@ -3,3 +3,5 @@ module github.com/sam-fredrickson/keymerge
 go 1.25
 
 require github.com/goccy/go-yaml v1.18.0
+
+require github.com/BurntSushi/toml v1.5.0

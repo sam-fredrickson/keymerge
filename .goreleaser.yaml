@@ -1,0 +1,82 @@
+version: 2
+
+project_name: cfgmerge
+
+builds:
+  - id: cfgmerge
+    main: ./cmd/cfgmerge
+    binary: cfgmerge
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: default
+    format_overrides:
+      - goos: windows
+        formats: [ 'zip' ]
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+release:
+  draft: false
+  prerelease: auto
+  name_template: '{{.ProjectName}} {{.Version}}'
+
+changelog:
+  use: github
+  sort: asc
+
+dockers:
+  - image_templates:
+      - "samuelfredrickson/cfgmerge:{{ .Version }}-amd64"
+    dockerfile: cmd/cfgmerge/Dockerfile
+    use: buildx
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+
+  - image_templates:
+      - "samuelfredrickson/cfgmerge:{{ .Version }}-arm64"
+    dockerfile: cmd/cfgmerge/Dockerfile
+    use: buildx
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+
+docker_manifests:
+  - name_template: "samuelfredrickson/cfgmerge:{{ .Version }}"
+    image_templates:
+      - "samuelfredrickson/cfgmerge:{{ .Version }}-amd64"
+      - "samuelfredrickson/cfgmerge:{{ .Version }}-arm64"
+
+  - name_template: "samuelfredrickson/cfgmerge:latest"
+    image_templates:
+      - "samuelfredrickson/cfgmerge:{{ .Version }}-amd64"
+      - "samuelfredrickson/cfgmerge:{{ .Version }}-arm64"

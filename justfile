@@ -2,6 +2,10 @@
 help:
     @just --list --unsorted
 
+# Build CLI program
+build:
+    go build ./cmd/cfgmerge
+
 # Lint and format
 lint:
     golangci-lint run --fix
@@ -16,7 +20,8 @@ test-race:
 
 # Run all tests & generate coverage report
 test-cover:
-     go test -coverprofile=coverage.out -coverpkg=.  ./...
+    go test -coverprofile=coverage.out -coverpkg=. .
+    go test -coverprofile=cmd/cfgmerge/coverage.out -coverpkg=./cmd/cfgmerge ./cmd/cfgmerge
 
 # View current coverage report
 view-coverage:

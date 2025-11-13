@@ -1,0 +1,10 @@
+services:
+  - name: api
+    replicas: 3
+  - name: worker
+    port: 9000
+    replicas: 2
+tags:
+  - staging
+database:
+  port: 5433

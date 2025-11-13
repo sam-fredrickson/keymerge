@@ -4,7 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/sam-fredrickson/keymerge)](https://goreportcard.com/report/github.com/sam-fredrickson/keymerge)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-A lightweight, format-agnostic Go library for merging configuration files with intelligent list handling.
+A lightweight Go library and CLI tool for merging configuration files with intelligent list handling.
 
 ## Why keymerge?
 
@@ -20,19 +20,70 @@ Perfect for: application configs, Kubernetes manifests, infrastructure-as-code, 
 
 ## Installation
 
+**CLI tool:**
+```bash
+go install github.com/sam-fredrickson/keymerge/cmd/cfgmerge@latest
+```
+Or download pre-built binaries from [releases](https://github.com/sam-fredrickson/keymerge/releases).
+
+**Go library:**
 ```bash
 go get github.com/sam-fredrickson/keymerge
 ```
-
-**Requirements:** Go 1.24 or later
+Requires Go 1.24 or later.
 
 ## Quick Start
 
+### CLI
+
+Merge environment-specific overlays into a base config:
+
+```bash
+cfgmerge base.yaml production.yaml > config.yaml
+```
+
+With `base.yaml`:
+```yaml
+database:
+  host: localhost
+  pool_size: 10
+services:
+  - name: api
+    replicas: 2
+  - name: worker
+    replicas: 1
+```
+
+And `production.yaml`:
+```yaml
+database:
+  host: prod.db.example.com
+  pool_size: 50
+services:
+  - name: api
+    replicas: 10
+```
+
+The result merges the `api` service (matched by `name`), preserves `worker`, and updates database settings.
+
+Run `cfgmerge -h` for options including custom primary keys, list modes, and format conversion.
+
+### Library
+
 ```go
 import (
+    _ "embed"
     "github.com/sam-fredrickson/keymerge"
     "github.com/goccy/go-yaml"
 )
+
+// Using the same files as in the CLI example.
+// In real life you'd read them from disk.
+
+//go:embed base.yaml
+var baseConfig []byte
+//go:embed production.yaml
+var prodOverlay []byte
 
 type Config struct {
     Database Database  `yaml:"database"`
@@ -52,43 +103,20 @@ type Service struct {
 }
 
 merger, _ := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
-
-baseConfig := []byte(`
-database:
-  host: localhost
-  port: 5432
-  pool_size: 10
-services:
-  - name: api
-    enabled: true
-    replicas: 2
-  - name: worker
-    enabled: true
-    replicas: 1
-`)
-
-prodOverlay := []byte(`
-database:
-  host: prod.db.example.com
-  pool_size: 50
-services:
-  - name: api
-    replicas: 10
-`)
-
 result, _ := merger.Merge(baseConfig, prodOverlay)
 ```
 
-The `api` service is matched by `name` (marked with `km:"primary"`) and deep-merged. The `worker` service is preserved. Database fields are merged, with the overlay overriding `host` and `pool_size` while preserving `port`.
+Just like in the CLI example, the `api` service is matched by `name` and deep-merged. Unlike that example, though,
+rather than assuming that `name` is a primary key, the `Name` field is explicitly marked via `km:"primary"`.
 
 ## Features
 
-- **Primary key matching:** Use `km:"primary"` tags to match and deep-merge list items by key fields (supports composite keys)
-- **Struct tag control:** Fine-grained merge behavior per field with `km` tags (`mode=`, `dupe=`, `field=`)
-- **Format-agnostic:** Works with YAML, JSON, TOML, or any format via unmarshal/marshal functions
+- **Primary key matching:** Match and deep-merge list items by key fields like `name` or `id` (supports composite keys)
+- **Format-agnostic:** YAML, JSON, TOML, or any format via unmarshal/marshal functions
 - **Deletion support:** Mark items for removal with configurable delete marker key
 - **List merge modes:** Concat (default), deduplicate, or replace for scalar lists
-- **Type-safe or dynamic:** Use `Merger[T]` with struct tags, or `UntypedMerger` for runtime configs
+- **CLI tool:** Standalone binary for merging config files without writing code
+- **Library modes:** Type-safe `Merger[T]` with struct tags, or `UntypedMerger` for dynamic configs
 - **Zero dependencies:** Pure Go with >90% test coverage
 
 See [docs/guide.md](docs/guide.md) for comprehensive examples and patterns.
@@ -101,7 +129,7 @@ See [docs/guide.md](docs/guide.md) for comprehensive examples and patterns.
 - **Scalars:** Overlay replaces base
 - **Deletion:** Items marked with delete key are removed
 
-## API
+## Library API
 
 The library provides two APIs:
 

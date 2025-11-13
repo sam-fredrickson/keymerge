@@ -8,6 +8,8 @@
 *.dll
 *.so
 *.dylib
+/cfgmerge
+/dist
 
 # Test binary, built with `go test -c`
 *.test
