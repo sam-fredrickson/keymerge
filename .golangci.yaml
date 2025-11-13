@@ -19,7 +19,6 @@ linters:
   settings:
     cyclop:
       max-complexity: 15
-      skip-tests: true
   exclusions:
     generated: lax
     presets:
