@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `cfgmerge`: add `-out` flag to set output file explicitly
 
 ### Changed
 
 ### Fixed
+
+## [0.3.2] - 2025-11-13
+
+### Added
+- `cfgmerge`: add `-out` flag to set output file explicitly
 
 ## [0.3.1] - 2025-11-12
 
@@ -160,7 +164,8 @@ opts := keymerge.Options{
 - Dependabot configuration
 - Complete documentation in README
 
-[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sam-fredrickson/keymerge/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sam-fredrickson/keymerge/compare/v0.1.1...v0.2.0
