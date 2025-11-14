@@ -20,11 +20,19 @@ import (
 var version = "dev"
 
 func main() {
+	var failed bool
+	defer func() {
+		if failed {
+			os.Exit(1)
+		}
+	}()
+
 	program := os.Args[0]
 	var keys primaryKeys
 	var scalar scalarMode
 	var dupe dupeMode
 	var deleteMarker string
+	var outputPath string
 	var outputFormat format
 	var showVersion bool
 
@@ -35,9 +43,9 @@ func main() {
 		fmt.Fprintf(out, "Items in lists are matched by primary key fields and deep-merged.\n\n")
 		fmt.Fprintf(out, "Example:\n")
 		fmt.Fprintf(out, "  # merge env-specific overlay into common base\n")
-		fmt.Fprintf(out, "  %s base.yaml env.yaml >config.yaml\n\n", program)
+		fmt.Fprintf(out, "  %s -out config.yaml base.yaml env.yaml\n\n", program)
 		fmt.Fprintf(out, "  # merge general prod overlay and env-specific overlay into common base\n")
-		fmt.Fprintf(out, "  %s base.yaml prod.yaml env.yaml >config.yaml\n\n", program)
+		fmt.Fprintf(out, "  %s -out config.yaml base.yaml prod.yaml env.yaml\n\n", program)
 		fmt.Fprintf(out, "Flags:\n")
 		flag.PrintDefaults()
 	}
@@ -46,6 +54,7 @@ func main() {
 	flag.Var(&scalar, "scalar", `scalar list mode [concat, dedup, replace] (default "concat")`)
 	flag.Var(&dupe, "dupe", `list dupe mode [unique, consolidate] (default "unique")`)
 	flag.StringVar(&deleteMarker, "delete-marker", "_delete", "deletion marker key")
+	flag.StringVar(&outputPath, "out", "", "output file path (defaults to stdout)")
 	flag.Var(&outputFormat, "format", `output format [json, yaml, toml] (defaults to first file's format)`)
 	flag.BoolVar(&showVersion, "version", false, "show version and exit")
 	flag.Parse()
@@ -56,16 +65,30 @@ func main() {
 	}
 
 	files := flag.Args()
+	var output io.Writer
+	if outputPath != "" {
+		f, err := os.Create(outputPath)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			failed = true
+			return
+		}
+		defer f.Close()
+		output = f
+	} else {
+		output = os.Stdout
+	}
 
 	err := Run(
 		keys, scalar, dupe, deleteMarker,
 		files, outputFormat,
-		os.Stdout,
+		output,
 	)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		_, _ = fmt.Fprintf(os.Stderr, "usage: %s [flags] FILE...\n", program)
-		os.Exit(1)
+		failed = true
+		return
 	}
 }
 

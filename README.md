@@ -39,7 +39,7 @@ Requires Go 1.24 or later.
 Merge environment-specific overlays into a base config:
 
 ```bash
-cfgmerge base.yaml production.yaml > config.yaml
+cfgmerge -o config.yaml base.yaml production.yaml
 ```
 
 With `base.yaml`:
@@ -62,6 +62,18 @@ database:
 services:
   - name: api
     replicas: 10
+```
+
+Will result in `config.yaml`:
+```yaml
+database:
+  host: prod.db.example.com
+  pool_size: 50
+services:
+- name: api
+  replicas: 10
+- name: worker
+  replicas: 1
 ```
 
 The result merges the `api` service (matched by `name`), preserves `worker`, and updates database settings.

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `cfgmerge`: add `-out` flag to set output file explicitly
 
 ### Changed
 
