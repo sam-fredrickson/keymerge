@@ -16,15 +16,155 @@ Configuration management often requires layering multiple config files (base + e
 - Working with any format (YAML, JSON, TOML) or pre-parsed data structures
 - Providing zero-dependency, production-ready code with >90% test coverage
 
-Perfect for: application configs, Kubernetes manifests, infrastructure-as-code, feature flags, and any scenario where you layer configs with complex nested structures.
+## See It In Action
+
+Here's a real-world example: merging a base config with production defaults, then applying customer-specific overrides. Shows deletion markers, tag deduplication, and format conversion.
+
+**Watch for:** Services matched by `name` and deep-merged (api: 1→10→25 replicas), `debug-proxy` removed via `_delete` marker, tags deduplicated (us-east appears only once), and cross-format merging (YAML/JSON/TOML → JSON).
+
+**base.yaml:**
+```yaml
+database:
+  host: localhost
+  pool_size: 10
+  timeout: 30s
+
+services:
+  - name: api
+    replicas: 1
+    port: 8080
+  - name: worker
+    replicas: 1
+    enabled: true
+  - name: debug-proxy
+    replicas: 1
+    port: 9000
+
+features:
+  - rate-limiting
+  - metrics
+
+tags:
+  - default
+  - api
+```
+
+**prod.json** (different format - showing format-agnostic merging):
+```json
+{
+  "database": {
+    "host": "prod.db.example.com",
+    "pool_size": 50,
+    "timeout": "60s"
+  },
+  "services": [
+    {
+      "name": "api",
+      "replicas": 10
+    },
+    {
+      "name": "worker",
+      "replicas": 5
+    },
+    {
+      "name": "debug-proxy",
+      "_delete": true
+    }
+  ],
+  "features": [
+    "tracing",
+    "audit-logging"
+  ],
+  "tags": [
+    "production",
+    "us-east"
+  ]
+}
+```
+
+**customer1.toml:**
+```toml
+features = ["premium-support", "custom-reports"]
+
+tags = ["customer1", "us-east", "premium"]
+
+[database]
+pool_size = 100
+read_replicas = 3
+
+[[services]]
+name = "api"
+replicas = 25
+cache_enabled = true
+```
+
+**Merge them:**
+```bash
+cfgmerge -scalar dedup -format json -out config.json base.yaml prod.json customer1.toml
+```
+
+**Result (config.json):**
+```json
+{
+  "database": {
+    "host": "prod.db.example.com",
+    "pool_size": 100,
+    "timeout": "60s",
+    "read_replicas": 3
+  },
+  "services": [
+    {
+      "name": "api",
+      "replicas": 25,
+      "port": 8080,
+      "cache_enabled": true
+    },
+    {
+      "name": "worker",
+      "replicas": 5,
+      "enabled": true
+    }
+  ],
+  "features": [
+    "rate-limiting",
+    "metrics",
+    "tracing",
+    "audit-logging",
+    "premium-support",
+    "custom-reports"
+  ],
+  "tags": [
+    "default",
+    "api",
+    "production",
+    "us-east",
+    "customer1",
+    "premium"
+  ]
+}
+```
+
+**What happened:**
+- **Services** matched by `name` and deep-merged (api: 1→10→25 replicas, worker: 1→5, debug-proxy removed)
+- **debug-proxy** removed via `_delete: true` marker in prod layer
+- **Database** settings progressively tuned (pool_size: 10→50→100, read_replicas added for customer)
+- **Features** concatenated across all layers (base→prod→customer features combined)
+- **Tags** deduplicated (via `-scalar dedup` flag - "us-east" appears only once)
+- **Format conversion**: YAML + JSON + TOML → JSON output
 
 ## Installation
 
 **CLI tool:**
 ```bash
+# Via go install
 go install github.com/sam-fredrickson/keymerge/cmd/cfgmerge@latest
+
+# Or download pre-built binaries from releases
+# https://github.com/sam-fredrickson/keymerge/releases
+
+# Or use Docker
+docker pull samuelfredrickson/cfgmerge:latest
 ```
-Or download pre-built binaries from [releases](https://github.com/sam-fredrickson/keymerge/releases).
 
 **Go library:**
 ```bash
@@ -32,85 +172,100 @@ go get github.com/sam-fredrickson/keymerge
 ```
 Requires Go 1.24 or later.
 
-## Quick Start
+## Quick Start: Kubernetes
 
-### CLI
+Use `cfgmerge` in an `initContainer` to merge base and environment-specific configs at deployment time:
 
-Merge environment-specific overlays into a base config:
-
-```bash
-cfgmerge -o config.yaml base.yaml production.yaml
-```
-
-With `base.yaml`:
 ```yaml
-database:
-  host: localhost
-  pool_size: 10
-services:
-  - name: api
-    replicas: 2
-  - name: worker
-    replicas: 1
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-configs
+data:
+  base.yaml: |
+    database:
+      host: localhost
+      port: 5432
+      pool_size: 10
+      timeout: 30s
+    features:
+      - name: rate-limiting
+        enabled: true
+        limit: 1000
+      - name: caching
+        enabled: false
+    log_level: info
+  production.yaml: |
+    database:
+      host: prod-db.default.svc.cluster.local
+      pool_size: 50
+      timeout: 60s
+    features:
+      - name: rate-limiting
+        limit: 10000
+      - name: caching
+        enabled: true
+        ttl: 300
+    log_level: warn
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: merge-config
+        image: samuelfredrickson/cfgmerge:latest
+        args:
+          - -out
+          - /config/app-config.yaml
+          - /configs/base.yaml
+          - /configs/production.yaml
+        volumeMounts:
+          - name: config-sources
+            mountPath: /configs
+          - name: merged-config
+            mountPath: /config
+
+      containers:
+      - name: app
+        image: myapp:latest
+        volumeMounts:
+          - name: merged-config
+            mountPath: /etc/myapp
+        # App reads merged config from /etc/myapp/app-config.yaml
+
+      volumes:
+      - name: config-sources
+        configMap:
+          name: app-configs
+      - name: merged-config
+        emptyDir: {}
 ```
 
-And `production.yaml`:
-```yaml
-database:
-  host: prod.db.example.com
-  pool_size: 50
-services:
-  - name: api
-    replicas: 10
-```
+This pattern keeps your base config in version control and environment-specific overrides in ConfigMaps, merging them at runtime.
 
-Will result in `config.yaml`:
-```yaml
-database:
-  host: prod.db.example.com
-  pool_size: 50
-services:
-- name: api
-  replicas: 10
-- name: worker
-  replicas: 1
-```
+**Want to customize?** Run `cfgmerge -h` to see all options: custom primary keys (`-keys`), list merge modes (`-scalar`, `-dupe`), deletion markers (`-delete-marker`), and more.
 
-The result merges the `api` service (matched by `name`), preserves `worker`, and updates database settings.
+## Library Usage
 
-Run `cfgmerge -h` for options including custom primary keys, list modes, and format conversion.
-
-### Library
+For programmatic config merging in Go:
 
 ```go
 import (
-    _ "embed"
     "github.com/sam-fredrickson/keymerge"
     "github.com/goccy/go-yaml"
 )
-
-// Using the same files as in the CLI example.
-// In real life you'd read them from disk.
-
-//go:embed base.yaml
-var baseConfig []byte
-//go:embed production.yaml
-var prodOverlay []byte
 
 type Config struct {
     Database Database  `yaml:"database"`
     Services []Service `yaml:"services"`
 }
 
-type Database struct {
-    Host     string `yaml:"host"`
-    Port     int    `yaml:"port"`
-    PoolSize int    `yaml:"pool_size"`
-}
-
 type Service struct {
     Name     string `yaml:"name" km:"primary"`
-    Enabled  bool   `yaml:"enabled"`
     Replicas int    `yaml:"replicas"`
 }
 
@@ -118,55 +273,28 @@ merger, _ := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml
 result, _ := merger.Merge(baseConfig, prodOverlay)
 ```
 
-Just like in the CLI example, the `api` service is matched by `name` and deep-merged. Unlike that example, though,
-rather than assuming that `name` is a primary key, the `Name` field is explicitly marked via `km:"primary"`.
+The `km:"primary"` struct tag marks `Name` as the primary key for matching service items during merge.
 
-## Features
+**Two API styles:**
+- **`NewMerger[T]`** - Type-safe with struct tags (recommended)
+- **`NewUntypedMerger`** - Dynamic for runtime configs
 
-- **Primary key matching:** Match and deep-merge list items by key fields like `name` or `id` (supports composite keys)
-- **Format-agnostic:** YAML, JSON, TOML, or any format via unmarshal/marshal functions
-- **Deletion support:** Mark items for removal with configurable delete marker key
-- **List merge modes:** Concat (default), deduplicate, or replace for scalar lists
-- **CLI tool:** Standalone binary for merging config files without writing code
-- **Library modes:** Type-safe `Merger[T]` with struct tags, or `UntypedMerger` for dynamic configs
-- **Zero dependencies:** Pure Go with >90% test coverage
-
-See [docs/guide.md](docs/guide.md) for comprehensive examples and patterns.
-
-## How It Works
-
-- **Maps:** Deep-merged recursively (overlay overrides base)
-- **Lists with keys:** Items matched by primary key are deep-merged; unmatched items appended
-- **Lists without keys:** Concatenated (or deduplicated/replaced based on mode)
-- **Scalars:** Overlay replaces base
-- **Deletion:** Items marked with delete key are removed
-
-## Library API
-
-The library provides two APIs:
-
-- **`NewMerger[T](opts, unmarshal, marshal)`** - Type-safe merger using struct tags (recommended)
-- **`NewUntypedMerger(opts, unmarshal, marshal)`** - Dynamic merger for runtime configs
-
-Both support reusable instances and `MergeUnstructured()` for pre-parsed data.
-
-See [API documentation](https://pkg.go.dev/github.com/sam-fredrickson/keymerge) for full reference.
+See the [User Guide](docs/guide.md) for comprehensive examples, patterns, and advanced features like composite keys, field-specific merge modes, and error handling.
 
 ## Documentation
 
-- **[User Guide](docs/guide.md)** - Comprehensive examples and patterns
-- **[API Docs](https://pkg.go.dev/github.com/sam-fredrickson/keymerge)** - Full API reference
-
-## Performance
-
-Optimized for config merging at application startup:
-
-- Small configs (2-10 items): ~600ns
-- Medium configs (100+ items, 5 overlays): ~38μs
-- Large configs (100+ items, 20 overlays): ~156μs
-
-Run benchmarks: `go test -bench=. ./bench/`
+- **[User Guide](docs/guide.md)** - Comprehensive examples, patterns, and best practices
+- **[API Reference](https://pkg.go.dev/github.com/sam-fredrickson/keymerge)** - Complete API documentation
 
 ## License
 
 Apache 2.0 - see [LICENSE](LICENSE)
+
+## Alternatives
+
+If keymerge doesn't fit your use case, consider:
+- **[uber/config](https://github.com/uber-go/config)** - YAML-based config with advanced merging (requires all inputs to be YAML)
+- **[kustomize](https://kustomize.io/)** - Kubernetes-native config management (K8s-specific, strategic merge patches)
+- **[yq](https://github.com/mikefarah/yq)** - YAML/JSON/XML processing (manual scripting required for complex merges)
+
+keymerge's niche is **format-agnostic merging with intelligent list matching** - if you need primary-key-based list merging across YAML/JSON/TOML, this is the tool.
