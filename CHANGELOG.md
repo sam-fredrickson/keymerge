@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Fix merging with TOML files when TOML is not the first format - TOML unmarshals array-of-tables as `[]map[string]interface{}` instead of `[]interface{}`, which caused typed slices to replace rather than merge
 
 ## [0.3.2] - 2025-11-13
 

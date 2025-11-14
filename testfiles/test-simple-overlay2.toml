@@ -1,0 +1,3 @@
+[[services]]
+name = "api"
+replicas = 25

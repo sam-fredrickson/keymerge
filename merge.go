@@ -412,8 +412,19 @@ func (m *UntypedMerger) mergeValues(base, overlay any) (any, error) {
 	}
 
 	// Handle slices
+	// Try direct type assertion first (fast path for []any)
 	baseSlice, baseIsSlice := base.([]any)
 	overlaySlice, overlayIsSlice := overlay.([]any)
+
+	// If direct assertion failed, try reflection-based conversion for typed slices
+	// (e.g., TOML unmarshals to []map[string]interface{} instead of []any)
+	if !baseIsSlice {
+		baseSlice, baseIsSlice = toSliceAny(base)
+	}
+	if !overlayIsSlice {
+		overlaySlice, overlayIsSlice = toSliceAny(overlay)
+	}
+
 	if baseIsSlice && overlayIsSlice {
 		return m.mergeSlices(baseSlice, overlaySlice)
 	}
@@ -726,6 +737,27 @@ func isNumeric(s string) bool {
 		}
 	}
 	return true
+}
+
+// toSliceAny converts a typed slice (e.g., []map[string]interface{}) to []any.
+// Returns (nil, false) if the value is not a slice.
+//
+// This handles cases where unmarshaling produces typed slices instead of []any.
+// For example, TOML's BurntSushi/toml library unmarshals array-of-tables as
+// []map[string]interface{} rather than []any.
+func toSliceAny(v any) ([]any, bool) {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice {
+		return nil, false
+	}
+
+	// Convert to []any
+	length := rv.Len()
+	result := make([]any, length)
+	for i := 0; i < length; i++ {
+		result[i] = rv.Index(i).Interface()
+	}
+	return result, true
 }
 
 // compositeKey represents a composite primary key value for map indexing.

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/goccy/go-yaml"
 
 	"github.com/sam-fredrickson/keymerge"
@@ -49,6 +50,15 @@ var fooOverlay2 []byte
 
 //go:embed testfiles/foo-z.yaml
 var fooFinal []byte
+
+//go:embed testfiles/test-simple-base.yaml
+var tomlTestBase []byte
+
+//go:embed testfiles/test-simple-overlay.yaml
+var tomlTestOverlay1 []byte
+
+//go:embed testfiles/test-simple-overlay2.toml
+var tomlTestOverlay2 []byte
 
 func TestSmoke(t *testing.T) {
 	parse := func(raw []byte) testConfig {
@@ -1247,5 +1257,66 @@ func TestMerge_EmptyPrimaryKeyName(t *testing.T) {
 
 	if !errors.Is(err, keymerge.ErrInvalidOptions) {
 		t.Errorf("expected errors.Is(err, ErrInvalidOptions) to be true")
+	}
+}
+
+// TestMergeMixedFormats_TOMLSliceType tests that TOML array-of-tables (which
+// unmarshals to []map[string]any instead of []any) is correctly handled during
+// merge.
+//
+// This is a regression test for a bug where TOML slices would replace rather
+// than merge.
+func TestMergeMixedFormats_TOMLSliceType(t *testing.T) {
+	// Unmarshal base and first overlay as YAML
+	var base, overlay1 any
+	if err := yaml.Unmarshal(tomlTestBase, &base); err != nil {
+		t.Fatalf("failed to unmarshal base: %v", err)
+	}
+	if err := yaml.Unmarshal(tomlTestOverlay1, &overlay1); err != nil {
+		t.Fatalf("failed to unmarshal overlay1: %v", err)
+	}
+
+	// Unmarshal second overlay as TOML (creates []map[string]interface{} instead of []any)
+	var overlay2 any
+	if err := toml.Unmarshal(tomlTestOverlay2, &overlay2); err != nil {
+		t.Fatalf("failed to unmarshal overlay2: %v", err)
+	}
+
+	// Merge all three
+	opts := keymerge.Options{
+		PrimaryKeyNames: []string{"name", "id"},
+	}
+	result, err := keymerge.MergeUnstructured(opts, base, overlay1, overlay2)
+	if err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+
+	// Extract services from result
+	resultMap, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected result to be map[string]any, got %T", result)
+	}
+
+	services, ok := resultMap["services"].([]any)
+	if !ok {
+		t.Fatalf("expected services to be []any, got %T", resultMap["services"])
+	}
+
+	// Should have 2 services: api (merged) and worker (preserved from base)
+	if len(services) != 2 {
+		t.Fatalf("expected 2 services, got %d", len(services))
+	}
+
+	// Verify both services are present by name
+	serviceNames := make([]string, 2)
+	for i, svc := range services {
+		svcMap := svc.(map[string]any)
+		serviceNames[i] = svcMap["name"].(string)
+	}
+	slices.Sort(serviceNames)
+
+	expectedNames := []string{"api", "worker"}
+	if !slices.Equal(serviceNames, expectedNames) {
+		t.Errorf("expected service names %v, got %v", expectedNames, serviceNames)
 	}
 }
