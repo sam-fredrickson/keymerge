@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+
+## [0.3.3] - 2025-11-15
+
+### Fixed
 - Fix merging with TOML files when TOML is not the first format - TOML unmarshals array-of-tables as `[]map[string]interface{}` instead of `[]interface{}`, which caused typed slices to replace rather than merge
 
 ## [0.3.2] - 2025-11-13
@@ -165,7 +169,8 @@ opts := keymerge.Options{
 - Dependabot configuration
 - Complete documentation in README
 
-[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sam-fredrickson/keymerge/compare/v0.2.0...v0.3.0
