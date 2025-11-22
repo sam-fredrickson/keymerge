@@ -73,3 +73,28 @@ jobs:
 
       - name: Run benchmarks
         run: go test -bench=. -benchmem ./bench/...
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Install Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+
+      - name: Build cfgmerge-krm
+        run: go build -o examples/kustomize/cfgmerge-krm ./cmd/cfgmerge-krm
+
+      - name: Run integration test
+        run: |
+          cd examples/kustomize
+          export PATH="$PWD:$PATH"
+          ./test.sh

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cfgmerge-transformer
+  annotations:
+    # using a containerized KRM function
+    #config.kubernetes.io/function: |
+    #  container:
+    #    image: samuelfredrickson/cfgmerge-krm
+    # using an exec KRM function
+    config.kubernetes.io/function: |
+      exec:
+        path: cfgmerge-krm

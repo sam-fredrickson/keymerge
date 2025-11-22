@@ -18,6 +18,21 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}}
 
+  - id: cfgmerge-krm
+    main: ./cmd/cfgmerge-krm
+    binary: cfgmerge-krm
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+
 archives:
   - id: default
     format_overrides:
@@ -70,6 +85,34 @@ dockers:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.source={{ .GitURL }}"
 
+  - image_templates:
+      - "samuelfredrickson/cfgmerge-krm:{{ .Version }}-amd64"
+    dockerfile: cmd/cfgmerge-krm/Dockerfile
+    use: buildx
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title=cfgmerge-krm"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+
+  - image_templates:
+      - "samuelfredrickson/cfgmerge-krm:{{ .Version }}-arm64"
+    dockerfile: cmd/cfgmerge-krm/Dockerfile
+    use: buildx
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title=cfgmerge-krm"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+
 docker_manifests:
   - name_template: "samuelfredrickson/cfgmerge:{{ .Version }}"
     image_templates:
@@ -80,3 +123,13 @@ docker_manifests:
     image_templates:
       - "samuelfredrickson/cfgmerge:{{ .Version }}-amd64"
       - "samuelfredrickson/cfgmerge:{{ .Version }}-arm64"
+
+  - name_template: "samuelfredrickson/cfgmerge-krm:{{ .Version }}"
+    image_templates:
+      - "samuelfredrickson/cfgmerge-krm:{{ .Version }}-amd64"
+      - "samuelfredrickson/cfgmerge-krm:{{ .Version }}-arm64"
+
+  - name_template: "samuelfredrickson/cfgmerge-krm:latest"
+    image_templates:
+      - "samuelfredrickson/cfgmerge-krm:{{ .Version }}-amd64"
+      - "samuelfredrickson/cfgmerge-krm:{{ .Version }}-arm64"

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-base
+  annotations:
+    config.keymerge.io/id: "app-config"
+    config.keymerge.io/order: "0"
+    config.keymerge.io/final-name: "app-config"
+data:
+  app-config.yaml: |
+    app:
+      name: my-app
+      version: "1.0.0"
+    server:
+      port: 8080
+      timeout: 30s
+    features:
+      enabled: []
+    logging:
+      level: info

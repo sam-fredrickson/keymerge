@@ -2,9 +2,10 @@
 help:
     @just --list --unsorted
 
-# Build CLI program
+# Build CLI programs
 build:
     go build ./cmd/cfgmerge
+    go build ./cmd/cfgmerge-krm
 
 # Lint and format
 lint:
@@ -22,6 +23,7 @@ test-race:
 test-cover:
     go test -coverprofile=coverage.out -coverpkg=. .
     go test -coverprofile=cmd/cfgmerge/coverage.out -coverpkg=./cmd/cfgmerge ./cmd/cfgmerge
+    go test -coverprofile=cmd/cfgmerge-krm/coverage.out -coverpkg=./cmd/cfgmerge-krm ./cmd/cfgmerge-krm
 
 # View current coverage report
 view-coverage:

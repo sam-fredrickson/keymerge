@@ -154,10 +154,13 @@ cfgmerge -scalar dedup -format json -out config.json base.yaml prod.json custome
 
 ## Installation
 
-**CLI tool:**
+**CLI tools:**
 ```bash
-# Via go install
+# Config file merger
 go install github.com/sam-fredrickson/keymerge/cmd/cfgmerge@latest
+
+# Kustomize KRM function
+go install github.com/sam-fredrickson/keymerge/cmd/cfgmerge-krm@latest
 
 # Or download pre-built binaries from releases
 # https://github.com/sam-fredrickson/keymerge/releases
@@ -248,6 +251,96 @@ spec:
 This pattern keeps your base config in version control and environment-specific overrides in ConfigMaps, merging them at runtime.
 
 **Want to customize?** Run `cfgmerge -h` to see all options: custom primary keys (`-keys`), list merge modes (`-scalar`, `-dupe`), deletion markers (`-delete-marker`), and more.
+
+## Quick Start: Kustomize
+
+Use `cfgmerge-krm` as a Kustomize transformer to merge ConfigMaps declaratively using annotations:
+
+```yaml
+# base/config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-base-config
+  annotations:
+    config.keymerge.io/id: "app-config"
+    config.keymerge.io/order: "0"
+    config.keymerge.io/final-name: "app-config"
+data:
+  app-config.yaml: |
+    server:
+      port: 8080
+    logging:
+      level: info
+```
+
+```yaml
+# features/tracing/config-snippet.yaml (Kustomize Component)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tracing-config
+  annotations:
+    config.keymerge.io/id: "app-config"
+    config.keymerge.io/order: "10"
+data:
+  app-config.yaml: |
+    tracing:
+      enabled: true
+      endpoint: http://jaeger:14268/api/traces
+```
+
+```yaml
+# envs/dev/config-env.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dev-overlay
+  annotations:
+    config.keymerge.io/id: "app-config"
+    config.keymerge.io/order: "100"
+data:
+  app-config.yaml: |
+    server:
+      port: 3000
+    logging:
+      level: debug
+```
+
+Configure the transformer in your `kustomization.yaml`:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - config-env.yaml
+components:
+  - ../../features/tracing
+transformers:
+  - transformer-config.yaml
+```
+
+```yaml
+# transformer-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cfgmerge-transformer
+  annotations:
+    config.kubernetes.io/function: |
+      exec:
+        path: cfgmerge-krm
+```
+
+Build with:
+```bash
+kustomize build --enable-alpha-plugins --enable-exec envs/dev
+```
+
+Result: Single merged ConfigMap with base config, tracing feature, and dev overrides applied in order.
+
+**See the full example:** `examples/kustomize/` includes a complete working setup with base, features, and environment overlays.
 
 ## Library Usage
 

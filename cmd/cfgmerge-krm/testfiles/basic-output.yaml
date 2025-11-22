@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ResourceList
+items:
+  # Passthrough resource (unchanged)
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: my-app
+    spec:
+      replicas: 3
+  # Merged ConfigMap
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: final-app-config
+    data:
+      config.yaml: |
+        replicas: 3
+        settings:
+          debug: false
+          env: production
