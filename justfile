@@ -74,7 +74,7 @@ wc:
     total_regular=0
     total_comment=0
     declare -a lines
-    for file in *.go; do
+    for file in $(find . -type f -name '*.go'); do
         [ -f "$file" ] || continue
         read regular comment < <(awk '
             /^[[:space:]]*\/\// { comment++ }
