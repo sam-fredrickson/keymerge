@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [0.3.4] - 2025-11-24
+
+### Added
 - `cfgmerge-krm` - Kustomize KRM function for merging ConfigMaps
   - Annotation-based configuration using `config.keymerge.io/*` annotations
   - Per-ConfigMap merge options (keys, scalar-mode, dupe-mode, delete-marker)
@@ -178,7 +186,8 @@ opts := keymerge.Options{
 - Dependabot configuration
 - Complete documentation in README
 
-[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/sam-fredrickson/keymerge/compare/v0.3.0...v0.3.1
