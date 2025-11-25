@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `cfgmerge-krm` - Kustomize KRM function for merging ConfigMaps
+  - Annotation-based configuration using `config.keymerge.io/*` annotations
+  - Per-ConfigMap merge options (keys, scalar-mode, dupe-mode, delete-marker)
+  - Format detection from data key names (`.yaml`, `.json`, `.toml`)
+  - Multiple independent ConfigMap groups via `id` annotation
+  - Ordered merging via `order` annotation (base=0, features=10-99, env=100+)
+  - Comprehensive integration example in `examples/kustomize/`
 
 ### Changed
 - Added `Operation` field to `MarhsalError` to indicate which phase (unmarshal or marshal) the error occurred

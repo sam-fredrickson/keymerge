@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-dev
+  annotations:
+    config.keymerge.io/id: "app-config"
+    config.keymerge.io/order: "100"
+data:
+  app-config.yaml: |
+    server:
+      port: 3000
+    logging:
+      level: debug
+    environment: development

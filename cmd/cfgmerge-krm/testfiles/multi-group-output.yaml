@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ResourceList
+items:
+  # Passthrough ConfigMap (unchanged)
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: regular-config
+    data:
+      key: value
+  # First merged group
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: app-config
+    data:
+      config.yaml: |
+        services:
+        - name: api
+          port: 8080
+          replicas: 3
+  # Second merged group
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: metrics-config
+    data:
+      prometheus.yaml: |
+        scrape_interval: 30s
+        scrape_timeout: 10s

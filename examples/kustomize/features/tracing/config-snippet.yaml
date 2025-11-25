@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-tracing
+  annotations:
+    config.keymerge.io/id: "app-config"
+    config.keymerge.io/order: "10"
+data:
+  app-config.yaml: |
+    features:
+      enabled:
+        - tracing
+    tracing:
+      endpoint: http://jaeger:14268/api/traces
+      sampling_rate: 0.1
+      service_name: my-app

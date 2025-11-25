@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ResourceList
+items:
+  # First group: app-config
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: app-base
+      annotations:
+        config.keymerge.io/id: "app-config"
+        config.keymerge.io/order: "0"
+        config.keymerge.io/final-name: "app-config"
+    data:
+      config.yaml: |
+        services:
+          - name: api
+            port: 8080
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: app-overlay
+      annotations:
+        config.keymerge.io/id: "app-config"
+        config.keymerge.io/order: "100"
+    data:
+      config.yaml: |
+        services:
+          - name: api
+            replicas: 3
+  # Second group: metrics-config
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: metrics-base
+      annotations:
+        config.keymerge.io/id: "metrics-config"
+        config.keymerge.io/order: "0"
+        config.keymerge.io/final-name: "metrics-config"
+    data:
+      prometheus.yaml: |
+        scrape_interval: 15s
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: metrics-overlay
+      annotations:
+        config.keymerge.io/id: "metrics-config"
+        config.keymerge.io/order: "100"
+    data:
+      prometheus.yaml: |
+        scrape_interval: 30s
+        scrape_timeout: 10s
+  # Passthrough ConfigMap (no keymerge annotations)
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: regular-config
+    data:
+      key: value
