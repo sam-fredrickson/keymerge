@@ -131,12 +131,19 @@ func (e *NonComparablePrimaryKeyError) Is(target error) bool {
 type MarshalError struct {
 	// Err is the underlying error returned by a marshaling function.
 	Err error
+	// Operation is either "unmarshal" (parsing input) or "marshal" (serializing result).
+	Operation string
 	// DocIndex tells which document the error occurred.
+	// For unmarshal errors, this is the index of the input document (0-based).
+	// For marshal errors (serializing the result), this is -1.
 	DocIndex int
 }
 
 func (e *MarshalError) Error() string {
-	return fmt.Sprintf("cannot marshal document at position %d: %v", e.DocIndex, e.Err)
+	if e.DocIndex < 0 {
+		return fmt.Sprintf("cannot %s result: %v", e.Operation, e.Err)
+	}
+	return fmt.Sprintf("cannot %s document at position %d: %v", e.Operation, e.DocIndex, e.Err)
 }
 
 func (e *MarshalError) Unwrap() error {
@@ -326,8 +333,9 @@ func (m *UntypedMerger) Merge(
 		var current any
 		if err := m.unmarshal(doc, &current); err != nil {
 			return nil, &MarshalError{
-				Err:      err,
-				DocIndex: i,
+				Err:       err,
+				Operation: "unmarshal",
+				DocIndex:  i,
 			}
 		}
 		parsedDocs[i] = current
@@ -340,7 +348,15 @@ func (m *UntypedMerger) Merge(
 	}
 
 	// Marshal back
-	return m.marshal(result)
+	marshaled, err := m.marshal(result)
+	if err != nil {
+		return nil, &MarshalError{
+			Err:       err,
+			Operation: "marshal",
+			DocIndex:  -1,
+		}
+	}
+	return marshaled, nil
 }
 
 func (m *UntypedMerger) reset(i int) {

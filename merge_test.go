@@ -227,6 +227,57 @@ func TestInvalidYAML(t *testing.T) {
 	}
 }
 
+func TestMarshalError_UnmarshalOperation(t *testing.T) {
+	base := []byte(`invalid: yaml: [`)
+	overlay := []byte(`foo: bar`)
+
+	_, err := mergeYAML(base, overlay)
+	if err == nil {
+		t.Fatal("expected error for invalid YAML")
+	}
+
+	var marshalErr *keymerge.MarshalError
+	if !errors.As(err, &marshalErr) {
+		t.Fatalf("expected MarshalError, got %T", err)
+	}
+
+	if marshalErr.Operation != "unmarshal" {
+		t.Errorf("expected Operation 'unmarshal', got %q", marshalErr.Operation)
+	}
+	if marshalErr.DocIndex != 0 {
+		t.Errorf("expected DocIndex 0, got %d", marshalErr.DocIndex)
+	}
+}
+
+func TestMarshalError_MarshalOperation(t *testing.T) {
+	// Create a marshal function that always fails
+	failingMarshal := func(v any) ([]byte, error) {
+		return nil, errors.New("marshal failed")
+	}
+
+	opts := keymerge.Options{}
+	base := []byte(`foo: bar`)
+	overlay := []byte(`baz: qux`)
+
+	_, err := keymerge.Merge(opts, yaml.Unmarshal, failingMarshal, base, overlay)
+	if err == nil {
+		t.Fatal("expected error from failing marshal")
+	}
+
+	var marshalErr *keymerge.MarshalError
+	if !errors.As(err, &marshalErr) {
+		t.Fatalf("expected MarshalError, got %T: %v", err, err)
+	}
+
+	if marshalErr.Operation != "marshal" {
+		t.Errorf("expected Operation 'marshal', got %q", marshalErr.Operation)
+	}
+	// DocIndex should be -1 for result marshaling (not a specific input document)
+	if marshalErr.DocIndex != -1 {
+		t.Errorf("expected DocIndex -1 for result marshal, got %d", marshalErr.DocIndex)
+	}
+}
+
 func TestAlternativePrimaryKey(t *testing.T) {
 	base := []byte(`
 users:
