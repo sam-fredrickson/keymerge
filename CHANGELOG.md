@@ -10,8 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Added `Operation` field to `MarhsalError` to indicate which phase (unmarshal or marshal) the error occurred
 
 ### Fixed
+- Fixed bug where composite keys with mismatched types were considered equal
 
 ## [0.3.3] - 2025-11-15
 
