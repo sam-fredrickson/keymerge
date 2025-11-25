@@ -1556,3 +1556,72 @@ func TestMerger_InvalidFieldName_Empty(t *testing.T) {
 		t.Errorf("error should mention empty: %s", tagErr.Message)
 	}
 }
+
+// Test that composite keys with different types but same string representation
+// do NOT incorrectly match. For example, {a: 1, b: 2} should not match {a: "1", b: "2"}.
+func TestMerger_CompositePrimaryKey_TypeDistinction(t *testing.T) {
+	// Use any for fields so YAML can parse them as different types
+	type Item struct {
+		A   any    `yaml:"a" km:"primary"`
+		B   any    `yaml:"b" km:"primary"`
+		Val string `yaml:"val"`
+	}
+
+	type Config struct {
+		Items []Item `yaml:"items"`
+	}
+
+	merger, err := keymerge.NewMerger[Config](keymerge.Options{}, yaml.Unmarshal, yaml.Marshal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Base has items with integer keys
+	base := []byte(`
+items:
+  - a: 1
+    b: 2
+    val: integers
+`)
+
+	// Overlay has item with STRING keys "1" and "2" (quoted in YAML)
+	// These should NOT match the base item because the types differ
+	overlay := []byte(`
+items:
+  - a: "1"
+    b: "2"
+    val: strings
+`)
+
+	result, err := merger.Merge(base, overlay)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var config Config
+	if err := yaml.Unmarshal(result, &config); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should have 2 items - they have different types so should NOT merge
+	if len(config.Items) != 2 {
+		t.Fatalf("expected 2 items (different key types should not match), got %d: %+v",
+			len(config.Items), config.Items)
+	}
+
+	// Verify we have both items preserved
+	hasIntegers := false
+	hasStrings := false
+	for _, item := range config.Items {
+		if item.Val == "integers" {
+			hasIntegers = true
+		}
+		if item.Val == "strings" {
+			hasStrings = true
+		}
+	}
+
+	if !hasIntegers || !hasStrings {
+		t.Errorf("expected both integer and string items preserved, got: %+v", config.Items)
+	}
+}

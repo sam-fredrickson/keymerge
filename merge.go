@@ -863,10 +863,11 @@ func keyString(key any) string {
 
 // toMapKey converts a primary key value to a map key.
 // For single values, returns the value directly.
-// For composite keys, returns a string representation.
+// For composite keys, returns a type-preserving string representation
+// using %#v to avoid collisions between different types (e.g., int 1 vs string "1").
 func toMapKey(key any) any {
 	if ck, ok := key.(*compositeKey); ok {
-		return fmt.Sprint(ck.values)
+		return fmt.Sprintf("%#v", ck.values)
 	}
 	return key
 }
